@@ -121,7 +121,7 @@ int _condvar_clock_gettime(int clock_type, timespec *ts)
 class dxCondvarWakeup
 {
 public:
-    dxCondvarWakeup(): m_waiters_list(NULL), m_signaled_state(false), m_state_is_permanent(false), m_object_initialized(false) {}
+    dxCondvarWakeup(): m_waiter_count(0), m_signal_count(0), m_state_is_permanent(false), m_object_initialized(false) {}
     ~dxCondvarWakeup() { DoFinalizeObject(); }
 
     bool InitializeObject() { return DoInitializeObject(); }
@@ -141,26 +141,12 @@ private:
     bool BlockAsAWaiter(const dThreadedWaitTime *timeout_time_ptr);
 
 private:
-    struct dxWaiterInfo
-    {
-        dxWaiterInfo(): m_signal_state(false) {}
-
-        dxWaiterInfo      **m_prev_info_ptr;
-        dxWaiterInfo      *m_next_info;
-        bool              m_signal_state;
-    };
-
-    void RegisterWaiterInList(dxWaiterInfo *waiter_info);
-    void UnregisterWaiterFromList(dxWaiterInfo *waiter_info);
-
-    bool MarkSignaledFirstWaiter();
-    static bool MarkSignaledFirstWaiterMeaningful(dxWaiterInfo *first_waiter);
-    bool MarkSignaledAllWaiters();
-    static bool MarkSignaledAllWaitersMeaningful(dxWaiterInfo *first_waiter);
+    void RegisterWaiterInList();
+    void UnregisterWaiterFromList(bool wait_result);
 
 private:
-    dxWaiterInfo  *m_waiters_list;
-    bool          m_signaled_state;
+    unsigned      m_waiter_count;
+    unsigned      m_signal_count;
     bool          m_state_is_permanent;
     bool          m_object_initialized;
     pthread_mutex_t m_wakeup_mutex;
@@ -259,7 +245,11 @@ void dxCondvarWakeup::ResetWakeup()
     int lock_result = pthread_mutex_lock(&m_wakeup_mutex);
     dICHECK(lock_result == EOK || ((errno = lock_result), false));
 
-    m_signaled_state = false;
+    if (m_signal_count > m_waiter_count)
+    {
+        m_signal_count = m_waiter_count;
+    }
+
     m_state_is_permanent = false;
 
     int unlock_result = pthread_mutex_unlock(&m_wakeup_mutex);
@@ -273,24 +263,16 @@ void dxCondvarWakeup::WakeupAThread()
 
     dIASSERT(!m_state_is_permanent); // Wakeup should not be used after permanent signal
 
-    if (!m_signaled_state)
+    if (m_signal_count < m_waiter_count)
     {
-        if (MarkSignaledFirstWaiter())
-        {
-            // All threads must be woken up regardless to the fact that only one waiter is marked.
-            // It is not possible to wake up a chosen thread personally 
-            // and if a random thread is woken up it can't know if there was a condition signal for it
-            // or the sleep was interrupted by POSIX signal.
-            // On the other hand, without this it is not possible to guarantee that a thread
-            // will be woken up per each WakeupAThread() call if there is more than one waiter
-            // and wakeup requests will not accumulate if there are no waiters.
-            int broadcast_result = pthread_cond_broadcast(&m_wakeup_cond);
-            dICHECK(broadcast_result == EOK || ((errno = broadcast_result), false));
-        }
-        else
-        {
-            m_signaled_state = true;
-        }
+        ++m_signal_count;
+
+        int signal_result = pthread_cond_signal(&m_wakeup_cond);
+        dICHECK(signal_result == EOK || ((errno = signal_result), false));
+    }
+    else if (m_signal_count == m_waiter_count)
+    {
+        m_signal_count = m_waiter_count + 1;
     }
 
     int unlock_result = pthread_mutex_unlock(&m_wakeup_mutex);
@@ -304,15 +286,12 @@ void dxCondvarWakeup::WakeupAllThreads()
 
     m_state_is_permanent = true;
 
-    if (!m_signaled_state)
+    if (m_signal_count <= m_waiter_count)
     {
-        m_signaled_state = true;
+        m_signal_count = m_waiter_count + 1;
 
-        if (MarkSignaledAllWaiters())
-        {
-            int broadcast_result = pthread_cond_broadcast(&m_wakeup_cond);
-            dICHECK(broadcast_result == EOK || ((errno = broadcast_result), false));
-        }
+        int broadcast_result = pthread_cond_broadcast(&m_wakeup_cond);
+        dICHECK(broadcast_result == EOK || ((errno = broadcast_result), false));
     }
 
     int unlock_result = pthread_mutex_unlock(&m_wakeup_mutex);
@@ -327,7 +306,7 @@ bool dxCondvarWakeup::WaitWakeup(const dThreadedWaitTime *timeout_time_ptr)
     int lock_result = pthread_mutex_lock(&m_wakeup_mutex);
     dICHECK(lock_result == EOK || ((errno = lock_result), false));
 
-    if (!m_signaled_state)
+    if (m_signal_count <= m_waiter_count)
     {
         if (!timeout_time_ptr || timeout_time_ptr->wait_nsec != 0 || timeout_time_ptr->wait_sec != 0)
         {
@@ -340,7 +319,11 @@ bool dxCondvarWakeup::WaitWakeup(const dThreadedWaitTime *timeout_time_ptr)
     }
     else
     {
-        m_signaled_state = m_state_is_permanent;
+        if (!m_state_is_permanent)
+        {
+            m_signal_count = m_waiter_count;
+        }
+
         wait_result = true;
     }
 
@@ -354,8 +337,7 @@ bool dxCondvarWakeup::BlockAsAWaiter(const dThreadedWaitTime *timeout_time_ptr)
 {
     bool wait_result = false;
 
-    dxWaiterInfo waiter_info;
-    RegisterWaiterInList(&waiter_info);
+    RegisterWaiterInList();
 
     timespec wakeup_time;
 
@@ -386,8 +368,9 @@ bool dxCondvarWakeup::BlockAsAWaiter(const dThreadedWaitTime *timeout_time_ptr)
             : pthread_cond_wait(&m_wakeup_cond, &m_wakeup_mutex);
         dICHECK(cond_result == EOK || cond_result == ETIMEDOUT || ((errno = cond_result), false));
 
-        if (waiter_info.m_signal_state)
+        if (m_signal_count != 0)
         {
+            m_signal_count = m_signal_count - 1;
             wait_result = true;
             break;
         }
@@ -399,127 +382,29 @@ bool dxCondvarWakeup::BlockAsAWaiter(const dThreadedWaitTime *timeout_time_ptr)
         }
     }
 
-    UnregisterWaiterFromList(&waiter_info);
+    UnregisterWaiterFromList(wait_result);
 
     return wait_result;
 }
 
 
-void dxCondvarWakeup::RegisterWaiterInList(dxWaiterInfo *waiter_info)
+void dxCondvarWakeup::RegisterWaiterInList()
 {
-    dxWaiterInfo *const first_waiter = m_waiters_list;
+    dIASSERT(m_signal_count <= m_waiter_count);
 
-    if (first_waiter == NULL)
-    {
-        waiter_info->m_next_info = waiter_info;
-        waiter_info->m_prev_info_ptr = &waiter_info->m_next_info;
-        m_waiters_list = waiter_info;
-    }
-    else
-    {
-        waiter_info->m_next_info = first_waiter;
-        waiter_info->m_prev_info_ptr = first_waiter->m_prev_info_ptr;
-        *first_waiter->m_prev_info_ptr = waiter_info;
-        first_waiter->m_prev_info_ptr = &waiter_info->m_next_info;
-    }
+    ++m_waiter_count;
+
+    dIASSERT(m_waiter_count != 0);
 }
 
-void dxCondvarWakeup::UnregisterWaiterFromList(dxWaiterInfo *waiter_info)
+void dxCondvarWakeup::UnregisterWaiterFromList(bool wait_result)
 {
-    dxWaiterInfo *next_info = waiter_info->m_next_info;
+    --m_waiter_count;
 
-    if (next_info == waiter_info)
+    if (m_waiter_count < m_signal_count && !wait_result)
     {
-        m_waiters_list = NULL;
+        m_signal_count = m_waiter_count + 1;
     }
-    else
-    {
-        next_info->m_prev_info_ptr = waiter_info->m_prev_info_ptr;
-        *waiter_info->m_prev_info_ptr = next_info;
-
-        if (waiter_info == m_waiters_list)
-        {
-            m_waiters_list = next_info;
-        }
-    }
-}
-
-
-bool dxCondvarWakeup::MarkSignaledFirstWaiter()
-{
-    bool waiter_found = false;
-
-    dxWaiterInfo *const first_waiter = m_waiters_list;
-
-    if (first_waiter)
-    {
-        waiter_found = MarkSignaledFirstWaiterMeaningful(first_waiter);
-    }
-
-    return waiter_found;
-}
-
-bool dxCondvarWakeup::MarkSignaledFirstWaiterMeaningful(dxWaiterInfo *first_waiter)
-{
-    bool waiter_found = false;
-
-    dxWaiterInfo *current_waiter = first_waiter;
-
-    while (true)
-    {
-        if (!current_waiter->m_signal_state)
-        {
-            current_waiter->m_signal_state = true;
-            waiter_found = true;
-            break;
-        }
-
-        current_waiter = current_waiter->m_next_info;
-        if (current_waiter == first_waiter)
-        {
-            break;
-        }
-    }
-
-    return waiter_found;
-}
-
-bool dxCondvarWakeup::MarkSignaledAllWaiters()
-{
-    bool waiter_found = false;
-
-    dxWaiterInfo *const first_waiter = m_waiters_list;
-
-    if (first_waiter)
-    {
-        waiter_found = MarkSignaledAllWaitersMeaningful(first_waiter);
-    }
-
-    return waiter_found;
-}
-
-bool dxCondvarWakeup::MarkSignaledAllWaitersMeaningful(dxWaiterInfo *first_waiter)
-{
-    bool waiter_found = false;
-
-    dxWaiterInfo *current_waiter = first_waiter;
-
-    while (true)
-    {
-        if (!current_waiter->m_signal_state)
-        {
-            current_waiter->m_signal_state = true;
-            waiter_found = true;
-        }
-
-        current_waiter = current_waiter->m_next_info;
-        if (current_waiter == first_waiter)
-        {
-            break;
-        }
-    }
-
-    return waiter_found;
 }
 
 

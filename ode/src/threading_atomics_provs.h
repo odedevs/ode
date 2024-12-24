@@ -62,13 +62,40 @@ public:
         --(*value_accumulator_ptr);
     }
 
-    static atomicord_t QueryTargetValue(volatile atomicord_t *value_storage_ptr)
+    static atomicord_t UnorderedQueryTargetValue(const volatile atomicord_t *value_storage_ptr)
+    {
+        return *value_storage_ptr;
+    }
+
+    static atomicord_t QueryTargetValue(const volatile atomicord_t *value_storage_ptr)
     {
         return *value_storage_ptr;
     }
 
     template<unsigned type_size>
     static sizeint AddValueToTarget(volatile void *value_accumulator_ptr, diffint value_addend);
+
+    static bool CompareExchangeTargetValue(volatile atomicord_t *value_storage_ptr,
+        atomicord_t comparand_value, atomicord_t new_value)
+    {
+        bool exchange_result = false;
+
+        atomicord_t original_value = *value_storage_ptr;
+
+        if (original_value == comparand_value)
+        {
+            *value_storage_ptr = new_value;
+
+            exchange_result = true;
+        }
+
+        return exchange_result;
+    }
+
+    static atomicptr_t UnorderedQueryTargetPtr(const volatile atomicptr_t *pointer_storage_ptr)
+    {
+        return *pointer_storage_ptr;
+    }
 
     static bool CompareExchangeTargetPtr(volatile atomicptr_t *pointer_storage_ptr, 
         atomicptr_t comparand_value, atomicptr_t new_value)
@@ -139,21 +166,29 @@ public:
         _OU_NAMESPACE::AtomicDecrementNoResult(value_accumulator_ptr);
     }
 
-    static atomicord_t QueryTargetValue(volatile atomicord_t *value_storage_ptr)
+    static atomicord_t UnorderedQueryTargetValue(const volatile atomicord_t *value_storage_ptr)
     {
-        // Query value with memory barrier before
-        atomicord_t result_value = *value_storage_ptr;
+        return _OU_NAMESPACE::UnorderedAtomicLoad(value_storage_ptr);
+    }
 
-        if (!_OU_NAMESPACE::AtomicCompareExchange(value_storage_ptr, result_value, result_value))
-        {
-            result_value = *value_storage_ptr;
-        }
-
-        return result_value;
+    static atomicord_t QueryTargetValue(const volatile atomicord_t *value_storage_ptr)
+    {
+        return _OU_NAMESPACE::AtomicLoad(value_storage_ptr);
     }
 
     template<unsigned type_size>
     static sizeint AddValueToTarget(volatile void *value_accumulator_ptr, diffint value_addend);
+
+    static bool CompareExchangeTargetValue(volatile atomicord_t *value_storage_ptr,
+        atomicord_t comparand_value, atomicord_t new_value)
+    {
+        return _OU_NAMESPACE::AtomicCompareExchange(value_storage_ptr, comparand_value, new_value);
+    }
+
+    static atomicptr_t UnorderedQueryTargetPtr(const volatile atomicptr_t *pointer_storage_ptr)
+    {
+        return _OU_NAMESPACE::UnorderedAtomicLoadPointer(pointer_storage_ptr);
+    }
 
     static bool CompareExchangeTargetPtr(volatile atomicptr_t *pointer_storage_ptr, 
         atomicptr_t comparand_value, atomicptr_t new_value)

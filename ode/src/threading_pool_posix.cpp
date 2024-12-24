@@ -51,6 +51,8 @@
 #define EOK   0
 #endif
 
+#define dMIN(A,B)  ((A)>(B) ? (B) : (A))
+
 
 #endif // #if dBUILTIN_THREADING_IMPL_ENABLED
 
@@ -261,13 +263,13 @@ private:
 
 
 dxThreadPoolThreadInfo::dxThreadPoolThreadInfo():
-m_thread_handle(),
-m_thread_allocated(false),
-m_ode_data_allocate_flags(0),
-m_command_code(dxTHREAD_COMMAND_EXIT),
-m_command_event(),
-m_acknowledgement_event(),
-m_command_param(NULL)
+    m_thread_handle(),
+    m_thread_allocated(false),
+    m_ode_data_allocate_flags(0),
+    m_command_code(dxTHREAD_COMMAND_EXIT),
+    m_command_event(),
+    m_acknowledgement_event(),
+    m_command_param(NULL)
 {
 }
 
@@ -593,9 +595,9 @@ private:
 
 
 dxThreadingThreadPool::dxThreadingThreadPool():
-m_thread_infos(NULL),
-m_thread_count(0),
-m_ready_wait_event()
+    m_thread_infos(NULL),
+    m_thread_count(0),
+    m_ready_wait_event()
 {
 }
 
@@ -768,7 +770,8 @@ void dxThreadingThreadPool::WaitIdleState()
     dxThreadingThreadPool *thread_pool = new dxThreadingThreadPool();
     if (thread_pool != NULL)
     {
-        if (thread_pool->InitializeThreads(thread_count, stack_size, ode_data_allocate_flags))
+        unsigned restricted_thread_count = dMIN(thread_count, dTHREADING_MAX_SUPPORTED_POOL_THREADS);
+        if (thread_pool->InitializeThreads(restricted_thread_count, stack_size, ode_data_allocate_flags))
         {
             // do nothing
         }

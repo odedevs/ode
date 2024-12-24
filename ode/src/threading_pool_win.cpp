@@ -46,6 +46,8 @@
 #include <process.h>
 #include <new>
 
+#define dMIN(A,B)  ((A)>(B) ? (B) : (A))
+
 
 #endif // #if dBUILTIN_THREADING_IMPL_ENABLED
 
@@ -65,8 +67,8 @@ public:
     void FinalizeObject();
 
     bool WaitInfinitely() { return ::WaitForSingleObject(m_event_handle, INFINITE) == WAIT_OBJECT_0; }
-    void SetEvent();
-    void ResetEvent();
+    inline void SetEvent();
+    inline void ResetEvent();
 
 private:
     HANDLE        m_event_handle;
@@ -146,12 +148,12 @@ public:
     struct dxServeImplementationParams
     {
         dxServeImplementationParams(dThreadingImplementationID impl, dxEventObject *ready_wait_event):
-    m_impl(impl), m_ready_wait_event(ready_wait_event)
-    {
-    }
+            m_impl(impl), m_ready_wait_event(ready_wait_event)
+        {
+        }
 
-    dThreadingImplementationID m_impl;
-    dxEventObject *m_ready_wait_event;
+        dThreadingImplementationID m_impl;
+        dxEventObject *m_ready_wait_event;
     };
 
     void ExecuteThreadCommand(dxTHREADCOMMAND command, void *param, bool wait_response);
@@ -177,12 +179,12 @@ private:
 
 
 dxThreadPoolThreadInfo::dxThreadPoolThreadInfo():
-m_thread_handle(NULL),
-m_ode_data_allocate_flags(0),
-m_command_code(dxTHREAD_COMMAND_EXIT),
-m_command_event(),
-m_acknowledgement_event(),
-m_command_param(NULL)
+    m_thread_handle(NULL),
+    m_ode_data_allocate_flags(0),
+    m_command_code(dxTHREAD_COMMAND_EXIT),
+    m_command_event(),
+    m_acknowledgement_event(),
+    m_command_param(NULL)
 {
 }
 
@@ -450,9 +452,9 @@ private:
 
 
 dxThreadingThreadPool::dxThreadingThreadPool():
-m_thread_infos(NULL),
-m_thread_count(0),
-m_ready_wait_event()
+    m_thread_infos(NULL),
+    m_thread_count(0),
+    m_ready_wait_event()
 {
 }
 
@@ -625,7 +627,8 @@ void dxThreadingThreadPool::WaitIdleState()
     dxThreadingThreadPool *thread_pool = new dxThreadingThreadPool();
     if (thread_pool != NULL)
     {
-        if (thread_pool->InitializeThreads(thread_count, stack_size, ode_data_allocate_flags))
+        unsigned restricted_thread_count = dMIN(thread_count, dTHREADING_MAX_SUPPORTED_POOL_THREADS);
+        if (thread_pool->InitializeThreads(restricted_thread_count, stack_size, ode_data_allocate_flags))
         {
             // do nothing
         }
