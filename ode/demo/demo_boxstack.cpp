@@ -20,9 +20,11 @@
  *                                                                       *
  *************************************************************************/
 
+#include <array>
 #include <ode/ode.h>
 #include <drawstuff/drawstuff.h>
 #include "texturepath.h"
+#include <iostream>
 
 #ifdef _MSC_VER
 #pragma warning(disable:4244 4305)  // for VC++, no precision loss complaints
@@ -90,7 +92,7 @@ unsigned int polygons[] = //Polygons for a cube (6 squares)
 
 // some constants
 
-#define NUM 100			// max number of objects
+#define NUM 5000			// max number of objects
 #define DENSITY (5.0)		// density of all objects
 #define GPB 3			// maximum number of geometries per body
 #define MAX_CONTACTS 8          // maximum number of contact points per body
@@ -127,6 +129,13 @@ static int fbnum=0;
 
 // this is called by dSpaceCollide when two objects in space are
 // potentially colliding.
+
+static dStopwatch g_stopWatch;
+static int g_frameCounter = 0;
+static std::array<std::array<double, 2>, 10> g_spawnPositions;
+static int g_currentSpawnPositionIndex = 0;
+static dThreadingImplementationID g_threading = 0;
+static dThreadingThreadPoolID g_pool = 0;
 
 static void nearCallback (void *, dGeomID o1, dGeomID o2)
 {
@@ -179,8 +188,8 @@ static void start()
 {
     dAllocateODEDataForThread(dAllocateMaskAll);
 
-    float xyz[3] = {2.1640f,-1.3079f,1.7600f};
-    float hpr[3] = {125.5000f,-17.0000f,0.0000f};
+    static float xyz[3] = {2.1640f,-1.3079f,1.7600f};
+    static float hpr[3] = {125.5000f,-17.0000f,0.0000f};
     dsSetViewpoint (xyz,hpr);
     printf ("To drop another object, press:\n");
     printf ("   b for box.\n");
@@ -198,6 +207,18 @@ static void start()
     printf ("To toggle dropping from random position/orientation, press r.\n");
     printf ("To save the current state to 'state.dif', press 1.\n");
     printf ("To show joint feedbacks of selected object, press f.\n");
+
+    dStopwatchReset( &g_stopWatch );
+    g_spawnPositions[0] = { 0.0, 0.0 };
+    g_spawnPositions[1] = { 15.0, 0.0 };
+    g_spawnPositions[2] = { 0.0, 15.0 };
+    g_spawnPositions[3] = { 15.0, 15.0 };
+    g_spawnPositions[4] = { 0.0, 30.0 };
+    g_spawnPositions[5] = { 15.0, 30.0 };
+    g_spawnPositions[6] = { 0.0, 45.0 };
+    g_spawnPositions[7] = { 15.0, 45.0 };
+    g_spawnPositions[8] = { 0.0, 60.0 };
+    g_spawnPositions[9] = { 15.0, 60.0 };
 }
 
 
@@ -246,9 +267,11 @@ static void command(int cmd)
             sides[k] = dRandReal()*0.5+0.1;
 
         dMatrix3 R;
+        std::array<double, 2> currentPos = g_spawnPositions[g_currentSpawnPositionIndex];
+        g_currentSpawnPositionIndex = ( g_currentSpawnPositionIndex + 1 ) % g_spawnPositions.size();
         if (random_pos)  {
             dBodySetPosition(obj[i].body,
-                             dRandReal()*2-1,dRandReal()*2-1,dRandReal()+2);
+                             currentPos[0] + dRandReal()*2-1,currentPos[1] + dRandReal()*2-1,dRandReal()+2);
             dRFromAxisAndAngle(R,dRandReal()*2.0-1.0,dRandReal()*2.0-1.0,
                                dRandReal()*2.0-1.0,dRandReal()*10.0-5.0);
         } else {
@@ -259,7 +282,7 @@ static void command(int cmd)
                 if (pos[2] > maxheight)
                     maxheight = pos[2];
             }
-            dBodySetPosition(obj[i].body, 0,0,maxheight+1);
+            dBodySetPosition(obj[i].body, currentPos[0],currentPos[1],maxheight+1);
             dRSetIdentity(R);
             //dRFromAxisAndAngle (R,0,0,1,/*dRandReal()*10.0-5.0*/0);
         }
@@ -415,6 +438,24 @@ static void command(int cmd)
         if (dBodyIsEnabled(obj[selected].body))
             doFeedback = 1;
 
+    } else if (cmd == 'm') {
+
+      g_threading = dThreadingAllocateMultiThreadedImplementation();
+      g_pool = dThreadingAllocateThreadPool(4, 0, dAllocateFlagBasicData, NULL);
+      dThreadingThreadPoolServeMultiThreadedImplementation(g_pool, g_threading);
+      // dWorldSetStepIslandsProcessingMaxThreadCount(world, 1);
+      dWorldSetStepThreadingImplementation(world, dThreadingImplementationGetFunctions(g_threading), g_threading);
+      printf( "Enabled multi-thread.\n" );
+
+    } else if (cmd == 'n') {
+      dThreadingImplementationShutdownProcessing(g_threading);
+      dThreadingFreeThreadPool(g_pool);
+      dWorldSetStepThreadingImplementation(world, NULL, NULL);
+      dThreadingFreeImplementation(g_threading);
+      g_threading = 0;
+      g_pool = 0;
+
+      printf( "Disabled multi-thread.\n" );
     }
 }
 
@@ -510,7 +551,17 @@ static void simLoop(int pause)
     dSpaceCollide(space, 0, &nearCallback);
 
     if (!pause)
-        dWorldQuickStep(world, 0.02);
+    {
+      dStopwatchStart( &g_stopWatch );
+      dWorldQuickStep( world, 0.02 );
+      dStopwatchStop( &g_stopWatch );
+      g_frameCounter += 1;
+      if ( dStopwatchTime( &g_stopWatch ) > 1.0 ) {
+        printf( "dWorldQuickStep frames in 1 sec (fps): %d, num of objects: %d\n", g_frameCounter, num );
+        g_frameCounter = 0;
+        dStopwatchReset( &g_stopWatch );
+      }
+    }
 
     if (write_world) {
         FILE *f = fopen("state.dif","wt");
@@ -581,7 +632,7 @@ int main (int argc, char **argv)
     contactgroup = dJointGroupCreate(0);
     dWorldSetGravity(world,0,0,-GRAVITY);
     dWorldSetCFM(world,1e-5);
-    dWorldSetAutoDisableFlag(world,1);
+    dWorldSetAutoDisableFlag(world,0);
 
 #if 1
 
@@ -598,19 +649,19 @@ int main (int argc, char **argv)
     dCreatePlane(space,0,0,1,0);
     memset(obj,0,sizeof(obj));
 
-    dThreadingImplementationID threading = dThreadingAllocateMultiThreadedImplementation();
-    dThreadingThreadPoolID pool = dThreadingAllocateThreadPool(4, 0, dAllocateFlagBasicData, NULL);
-    dThreadingThreadPoolServeMultiThreadedImplementation(pool, threading);
-    // dWorldSetStepIslandsProcessingMaxThreadCount(world, 1);
-    dWorldSetStepThreadingImplementation(world, dThreadingImplementationGetFunctions(threading), threading);
+    //dThreadingImplementationID threading = dThreadingAllocateMultiThreadedImplementation();
+    //dThreadingThreadPoolID pool = dThreadingAllocateThreadPool(4, 0, dAllocateFlagBasicData, NULL);
+    //dThreadingThreadPoolServeMultiThreadedImplementation(pool, threading);
+    //// dWorldSetStepIslandsProcessingMaxThreadCount(world, 1);
+    //dWorldSetStepThreadingImplementation(world, dThreadingImplementationGetFunctions(threading), threading);
 
     // run simulation
-    dsSimulationLoop(argc, argv, DS_SIMULATION_DEFAULT_WIDTH, DS_SIMULATION_DEFAULT_HEIGHT, &fn);
+    dsSimulationLoop(argc,argv,640,480,&fn);
 
-    dThreadingImplementationShutdownProcessing(threading);
-    dThreadingFreeThreadPool(pool);
-    dWorldSetStepThreadingImplementation(world, NULL, NULL);
-    dThreadingFreeImplementation(threading);
+    //dThreadingImplementationShutdownProcessing(threading);
+    //dThreadingFreeThreadPool(pool);
+    //dWorldSetStepThreadingImplementation(world, NULL, NULL);
+    //dThreadingFreeImplementation(threading);
 
     dJointGroupDestroy(contactgroup);
     dSpaceDestroy(space);
