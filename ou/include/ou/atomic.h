@@ -98,6 +98,8 @@
 
 #if _OU_FEATURE_SET >= _OU_FEATURE_SET_ATOMICS
 
+#include <ou/assert.h>
+#include <ou/macros.h>
 #include <ou/inttypes.h>
 #include <ou/namespace.h>
 #include <ou/platform.h>
@@ -1684,11 +1686,15 @@ bool _OU_CONVENTION_API AtomicCompareExchangePointer(volatile atomicptr *papDest
 void _OU_CONVENTION_API AtomicIncrementNoResult(volatile atomicord32 *paoDestination);
 void _OU_CONVENTION_API AtomicDecrementNoResult(volatile atomicord32 *paoDestination);
 void _OU_CONVENTION_API AtomicStore(volatile atomicord32 *paoDestination, atomicord32 aoValue);
+atomicord32 _OU_CONVENTION_API UnorderedAtomicLoad(const volatile atomicord32 *paoSource);
+atomicord32 _OU_CONVENTION_API AtomicLoad(const volatile atomicord32 *paoSource);
 void _OU_CONVENTION_API AtomicExchangeAddNoResult(volatile atomicord32 *paoDestination, atomicord32 aoAddend);
 void _OU_CONVENTION_API AtomicAndNoResult(volatile atomicord32 *paoDestination, atomicord32 aoBitMask);
 void _OU_CONVENTION_API AtomicOrNoResult(volatile atomicord32 *paoDestination, atomicord32 aoBitMask);
 void _OU_CONVENTION_API AtomicXorNoResult(volatile atomicord32 *paoDestination, atomicord32 aoBitMask);
 void _OU_CONVENTION_API AtomicStorePointer(volatile atomicptr *papDestination, atomicptr apValue);
+atomicptr _OU_CONVENTION_API UnorderedAtomicLoadPointer(const volatile atomicptr *papSource);
+atomicptr _OU_CONVENTION_API AtomicLoadPointer(const volatile atomicptr *papSource);
 void _OU_CONVENTION_API AtomicReadReorderBarrier();
 
 #endif // #if defined(__OU_DOXYGEN__)
@@ -1800,6 +1806,32 @@ static _OU_ALWAYSINLINE void _OU_CONVENTION_API
 #endif // #ifndef __OU_ATOMIC_STORE_FUNCTION_DEFINED
 
 
+#ifndef __OU_UNORDERED_ATOMIC_LOAD_FUNCTION_DEFINED
+
+static _OU_ALWAYSINLINE atomicord32 _OU_CONVENTION_API
+/*atomicord32 */UnorderedAtomicLoad(const volatile atomicord32 *paoSource)
+{
+    OU_ASSERT(OU_ALIGNED_SIZET(paoSource, sizeof(*paoSource)) == OU_ALIGNED_SIZET(paoSource, 1));
+
+    return *paoSource;
+}
+
+
+#endif // #ifndef __OU_UNORDERED_ATOMIC_LOAD_FUNCTION_DEFINED 
+
+
+#ifndef __OU_ATOMIC_LOAD_FUNCTION_DEFINED
+
+static _OU_ALWAYSINLINE atomicord32 _OU_CONVENTION_API 
+/*atomicord32 */AtomicLoad(const volatile atomicord32 *paoSource)
+{
+	return AtomicExchangeAdd((volatile atomicord32 *)paoSource, 0);
+}
+
+
+#endif // #ifndef __OU_ATOMIC_LOAD_FUNCTION_DEFINED
+
+
 #ifndef __OU_ATOMIC_STOREPTR_FUNCTION_DEFINED
 
 static _OU_ALWAYSINLINE void _OU_CONVENTION_API 
@@ -1810,6 +1842,39 @@ static _OU_ALWAYSINLINE void _OU_CONVENTION_API
 
 
 #endif // #ifndef __OU_ATOMIC_STOREPTR_FUNCTION_DEFINED
+
+
+#ifndef __OU_UNORDERED_ATOMIC_LOADPTR_FUNCTION_DEFINED
+
+static _OU_ALWAYSINLINE atomicptr _OU_CONVENTION_API
+/*atomicptr */UnorderedAtomicLoadPointer(const volatile atomicptr *papSource)
+{
+    OU_ASSERT(OU_ALIGNED_SIZET(papSource, sizeof(*papSource)) == OU_ALIGNED_SIZET(papSource, 1));
+
+    return *papSource;
+}
+
+
+#endif // #ifndef __OU_UNORDERED_ATOMIC_LOADPTR_FUNCTION_DEFINED
+
+
+#ifndef __OU_ATOMIC_LOADPTR_FUNCTION_DEFINED
+
+static _OU_ALWAYSINLINE atomicptr _OU_CONVENTION_API 
+/*atomicptr */AtomicLoadPointer(const volatile atomicptr *papSource)
+{
+    atomicptr apResultValue = UnorderedAtomicLoadPointer(papSource);
+
+    if (!AtomicCompareExchangePointer((volatile atomicptr *)papSource, apResultValue, apResultValue))
+    {
+        apResultValue = UnorderedAtomicLoadPointer(papSource);
+    }
+
+    return apResultValue;
+}
+
+
+#endif // #ifndef __OU_ATOMIC_LOADPTR_FUNCTION_DEFINED
 
 
 //////////////////////////////////////////////////////////////////////////

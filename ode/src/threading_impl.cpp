@@ -271,7 +271,7 @@ static void WaitThreadedCall(
 
 static unsigned RetrieveThreadingThreadCount(dThreadingImplementationID impl)
 {
-    return ((dxIThreadingImplementation *)impl)->RetrieveActiveThreadsCount();
+    return ((dxIThreadingImplementation *)impl)->RetrieveActiveThreadCount();
 }
 
 static int PreallocateResourcesForThreadedCalls(dThreadingImplementationID impl, ddependencycount_t max_simultaneous_calls_estimate)

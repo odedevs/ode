@@ -48,6 +48,17 @@
 #define dMAKE_RELEASEE_JOBINSTANCE(releasee) ((dxThreadedJobInfo *)(releasee))
 
 
+#define dTHREADING_MAX_SUPPORTED_POOL_THREADS   0xFFFF
+
+
+class dxThreadingTraits
+{
+public:
+    static unsigned threads_max() { return dTHREADING_MAX_SUPPORTED_POOL_THREADS; }
+    static unsigned wakeup_signal_bit() { dSASSERT((dTHREADING_MAX_SUPPORTED_POOL_THREADS & (dTHREADING_MAX_SUPPORTED_POOL_THREADS + 1)) == 0); return (dTHREADING_MAX_SUPPORTED_POOL_THREADS + 1); }
+};
+
+
 template <class tThreadMutex>
 class dxtemplateMutexGroup
 {
@@ -177,6 +188,7 @@ struct dxThreadedJobInfo:
 
     dxThreadedJobInfo       *m_next_job;
     dxThreadedJobInfo       **m_prev_job_next_ptr;
+    dxThreadedJobInfo       *m_next_ready_job;
 
     ddependencycount_t      m_dependencies_count;
     dxThreadedJobInfo       *m_dependent_job;
@@ -210,6 +222,7 @@ class dxtemplateJobListContainer
 {
 public:
     dxtemplateJobListContainer():
+        m_ready_jobs(NULL),
         m_job_list(NULL),
         m_info_pool((atomicptr_t)NULL),
         m_pool_access_lock(),
@@ -222,6 +235,7 @@ public:
     ~dxtemplateJobListContainer()
     {
         dIASSERT(m_job_list == NULL); // Would not it be nice to wait for jobs to complete before deleting the list?
+        dIASSERT(m_ready_jobs == NULL);
 
         FreeJobInfoPoolInfos();
         DoFinalizeObject();
@@ -242,13 +256,15 @@ public:
     typedef void dWaitSignallingFunction(void *job_call_wait);
 
 public:
-    dxThreadedJobInfo *ReleaseAJobAndPickNextPendingOne(
+    bool ReleaseAJobAndPickNextPendingOne(
         dxThreadedJobInfo *job_to_release, bool job_result, dWaitSignallingFunction *wait_signal_proc_ptr, 
-        bool &out_last_job_flag);
+        dxThreadedJobInfo *&out_next_job, bool &out_last_job_flag);
 
 private:
-    dxThreadedJobInfo *PickNextPendingJob(bool &out_last_job_flag);
+    bool PickNextPendingJob(dxThreadedJobInfo *&out_next_job, bool &out_last_job_flag);
+    inline bool UnlinkJobFromReadyList(dxThreadedJobInfo *&out_next_job, bool &out_last_job_flag);
     void ReleaseAJob(dxThreadedJobInfo *job_instance, bool job_result, dWaitSignallingFunction *wait_signal_proc_ptr);
+    inline void LinkJobIntoReadyList(dxThreadedJobInfo *job_instance);
 
 public:
     inline dxThreadedJobInfo *AllocateJobInfoFromPool();
@@ -276,9 +292,10 @@ private:
     bool DoPreallocateJobInfos(ddependencycount_t required_info_count);
 
 public:
-    bool IsJobListReadyForShutdown() const { return m_job_list == NULL; }
+    bool IsJobListReadyForShutdown() const { return /*m_ready_jobs == NULL && -- not needed*/m_job_list == NULL; }
 
 private:
+    volatile atomicptr_t    m_ready_jobs;
     dxThreadedJobInfo       *m_job_list;
     volatile atomicptr_t    m_info_pool; // dxThreadedJobInfo *
     tThreadMutex            m_pool_access_lock;
@@ -300,6 +317,7 @@ public:
     dxtemplateJobListThreadedHandler(tJobListContainer *list_container_ptr):
         m_job_list_ptr(list_container_ptr),
         m_processing_wakeup(),
+        m_idle_thread_count(0),
         m_active_thread_count(0),
         m_shutdown_requested(0)
     {
@@ -308,6 +326,7 @@ public:
     ~dxtemplateJobListThreadedHandler()
     {
         dIASSERT(m_active_thread_count == 0);
+        // dIASSERT(m_idle_thread_count == 0); -- wrong
 
         DoFinalizeObject();
     }
@@ -326,7 +345,7 @@ public:
     inline void PrepareForWaitingAJobCompletion();
 
 public:
-    inline unsigned RetrieveActiveThreadsCount();
+    inline unsigned RetrieveActiveThreadCount();
     inline void StickToJobsProcessing(dxThreadReadyToServeCallback *readiness_callback/*=NULL*/, void *callback_context/*=NULL*/);
 
 private:
@@ -347,13 +366,19 @@ private:
     typedef typename tJobListContainer::dxAtomicsProvider dxAtomicsProvider;
     typedef typename tJobListContainer::atomicord_t atomicord_t;
 
-    atomicord_t GetActiveThreadsCount() const { return m_active_thread_count; }
-    void RegisterAsActiveThread() { dxAtomicsProvider::template AddValueToTarget<sizeof(atomicord_t)>((volatile void *)&m_active_thread_count, 1); }
-    void UnregisterAsActiveThread() { dxAtomicsProvider::template AddValueToTarget<sizeof(atomicord_t)>((volatile void *)&m_active_thread_count, -1); }
+    void RegisterAsIdleThread() { dxAtomicsProvider::IncrementTargetNoRet(&m_idle_thread_count); }
+    bool UnregisterAsIdleThread(bool &out_extra_wakeup_is_needed);
+    
+    void RegisterForWakeupSignal(bool &out_wakeup_is_needed);
+
+    atomicord_t GetActiveThreadCount() const { return m_active_thread_count; }
+    void RegisterAsActiveThread() { dxAtomicsProvider::IncrementTargetNoRet(&m_active_thread_count); }
+    void UnregisterAsActiveThread() { dxAtomicsProvider::DecrementTargetNoRet(&m_active_thread_count); }
 
 private:
     tJobListContainer       *m_job_list_ptr;
     tThreadWakeup           m_processing_wakeup;
+    volatile atomicord_t    m_idle_thread_count;
     volatile atomicord_t    m_active_thread_count;
     int                     m_shutdown_requested;
 };
@@ -386,7 +411,7 @@ public:
     inline void PrepareForWaitingAJobCompletion();
 
 public:
-    inline unsigned RetrieveActiveThreadsCount();
+    inline unsigned RetrieveActiveThreadCount();
     inline void StickToJobsProcessing(dxThreadReadyToServeCallback *readiness_callback/*=NULL*/, void *callback_context/*=NULL*/);
 
 private:
@@ -433,7 +458,7 @@ public:
         dxICallWait *call_wait, const dThreadedWaitTime *timeout_time_ptr/*=NULL*/) = 0;
 
 public:
-    virtual unsigned RetrieveActiveThreadsCount() = 0;
+    virtual unsigned RetrieveActiveThreadCount() = 0;
     virtual void StickToJobsProcessing(dxThreadReadyToServeCallback *readiness_callback/*=NULL*/, void *callback_context/*=NULL*/) = 0;
     virtual void ShutdownProcessing() = 0;
     virtual void CleanupForRestart() = 0;
@@ -494,7 +519,7 @@ protected:
         dxICallWait *call_wait, const dThreadedWaitTime *timeout_time_ptr/*=NULL*/);
 
 protected:
-    virtual unsigned RetrieveActiveThreadsCount();
+    virtual unsigned RetrieveActiveThreadCount();
     virtual void StickToJobsProcessing(dxThreadReadyToServeCallback *readiness_callback/*=NULL*/, void *callback_context/*=NULL*/);
     virtual void ShutdownProcessing();
     virtual void CleanupForRestart();
@@ -593,8 +618,8 @@ void dxtemplateMutexGroup<tThreadMutex>::FinalizeMutexArray(dmutexindex_t Mutex_
 /************************************************************************/
 
 template<class tThreadLull, class tThreadMutex, class tAtomicsProvider>
-dxThreadedJobInfo *dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::ReleaseAJobAndPickNextPendingOne(
-    dxThreadedJobInfo *job_to_release, bool job_result, dWaitSignallingFunction *wait_signal_proc_ptr, bool &out_last_job_flag)
+bool dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::ReleaseAJobAndPickNextPendingOne(
+    dxThreadedJobInfo *job_to_release, bool job_result, dWaitSignallingFunction *wait_signal_proc_ptr, dxThreadedJobInfo *&out_next_job, bool &out_last_job_flag)
 {
     if (job_to_release != NULL)
     {
@@ -603,35 +628,57 @@ dxThreadedJobInfo *dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomic
 
     dxMutexLockHelper list_access(m_list_access_lock);
 
-    dxThreadedJobInfo *picked_job = PickNextPendingJob(out_last_job_flag);
-    return picked_job;
+    return PickNextPendingJob(out_next_job, out_last_job_flag);
 }
 
 template<class tThreadLull, class tThreadMutex, class tAtomicsProvider>
-dxThreadedJobInfo *dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::PickNextPendingJob(
-    bool &out_last_job_flag)
+bool dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::PickNextPendingJob(
+    dxThreadedJobInfo *&out_next_job, bool &out_last_job_flag)
 {
-    dxThreadedJobInfo *current_job = m_job_list;
-    bool last_job_flag = false;
+    bool result = false;
 
-    while (current_job != NULL)
+    dxThreadedJobInfo *current_job;
+    if (UnlinkJobFromReadyList(current_job, out_last_job_flag))
     {
-        if (current_job->m_dependencies_count == 0)
-        {
-            // It is OK to assign in unsafe manner - dependencies count should not be changed
-            // after the job has become ready for execution
-            current_job->m_dependencies_count = 1;
-            last_job_flag = current_job->m_next_job == NULL;
+        dIASSERT(current_job->m_dependencies_count == 0);
 
-            RemoveJobInfoFromList(current_job);
+        // It is OK to assign in unsafe manner - dependencies count should not be changed
+        // after the job has become ready for execution
+        current_job->m_dependencies_count = 1;
+
+        RemoveJobInfoFromList(current_job);
+
+        out_next_job = current_job;
+        result = true;
+    }
+
+    return result;
+}
+
+template<class tThreadLull, class tThreadMutex, class tAtomicsProvider>
+bool dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::UnlinkJobFromReadyList(
+    dxThreadedJobInfo *&out_next_job, bool &out_last_job_flag)
+{
+    bool result = false;
+
+    dxThreadedJobInfo *current_job = (dxThreadedJobInfo *)tAtomicsProvider::UnorderedQueryTargetPtr(&m_ready_jobs);
+    
+    for (bool continue_into_the_loop = current_job != NULL; continue_into_the_loop; continue_into_the_loop = true)
+    {
+        dxThreadedJobInfo *next_job = current_job->m_next_ready_job;
+        if (tAtomicsProvider::CompareExchangeTargetPtr(&m_ready_jobs, current_job, next_job))
+        {
+            out_last_job_flag = next_job == NULL;
+
+            out_next_job = current_job;
+            result = true;
             break;
         }
 
-        current_job = current_job->m_next_job;
+        current_job = (dxThreadedJobInfo *)tAtomicsProvider::UnorderedQueryTargetPtr(&m_ready_jobs);
     }
 
-    out_last_job_flag = last_job_flag;
-    return current_job;
+    return result;
 }
 
 template<class tThreadLull, class tThreadMutex, class tAtomicsProvider>
@@ -655,8 +702,14 @@ void dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::Re
 
         ddependencycount_t new_dependencies_count = SmartAddJobDependenciesCount(current_job, -1);
 
-        if (new_dependencies_count != 0 || !job_dequeued)
+        if (new_dependencies_count != 0)
         {
+            break;
+        }
+
+        if (!job_dequeued)
+        {
+            LinkJobIntoReadyList(current_job);
             break;
         }
 
@@ -699,6 +752,22 @@ void dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::Re
 }
 
 template<class tThreadLull, class tThreadMutex, class tAtomicsProvider>
+void dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::LinkJobIntoReadyList(dxThreadedJobInfo *job_instance)
+{
+    for (dxThreadedJobInfo *first_ready_job = (dxThreadedJobInfo *)tAtomicsProvider::UnorderedQueryTargetPtr(&m_ready_jobs); ; )
+    {
+        job_instance->m_next_ready_job = first_ready_job;
+        if (tAtomicsProvider::CompareExchangeTargetPtr(&m_ready_jobs, first_ready_job, job_instance))
+        {
+            break;
+        }
+
+        first_ready_job = (dxThreadedJobInfo *)tAtomicsProvider::UnorderedQueryTargetPtr(&m_ready_jobs);
+    }
+}
+
+
+template<class tThreadLull, class tThreadMutex, class tAtomicsProvider>
 dxThreadedJobInfo *dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::AllocateJobInfoFromPool()
 {
     // No locking is necessary
@@ -709,15 +778,24 @@ dxThreadedJobInfo *dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomic
 template<class tThreadLull, class tThreadMutex, class tAtomicsProvider>
 void dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::QueueJobForProcessing(dxThreadedJobInfo *job_instance)
 {
-    dxMutexLockHelper list_access(m_list_access_lock);
+    bool job_is_ready = job_instance->m_dependencies_count == 0;
 
-    InsertJobInfoIntoListHead(job_instance);
+    {
+        dxMutexLockHelper list_access(m_list_access_lock);
+
+        InsertJobInfoIntoListHead(job_instance);
+    }
+
+    if (job_is_ready)
+    {
+        LinkJobIntoReadyList(job_instance);
+    }
 }
 
 
 template<class tThreadLull, class tThreadMutex, class tAtomicsProvider>
 void dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::AlterJobProcessingDependencies(dxThreadedJobInfo *job_instance, ddependencychange_t dependencies_count_change, 
-                                                                                                             bool &out_job_has_become_ready)
+    bool &out_job_has_become_ready)
 {
     // Dependencies should not be changed when job has already become ready for execution
     dIASSERT(job_instance->m_dependencies_count != 0);
@@ -725,6 +803,12 @@ void dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::Al
     dIASSERT(dependencies_count_change < 0 ? (job_instance->m_dependencies_count >= (ddependencycount_t)(-dependencies_count_change)) : ((ddependencycount_t)(-(ddependencychange_t)job_instance->m_dependencies_count) > (ddependencycount_t)dependencies_count_change));
 
     ddependencycount_t new_dependencies_count = SmartAddJobDependenciesCount(job_instance, dependencies_count_change);
+
+    if (new_dependencies_count == 0)
+    {
+        LinkJobIntoReadyList(job_instance);
+    }
+
     out_job_has_become_ready = new_dependencies_count == 0;
 }
 
@@ -929,9 +1013,9 @@ void dxtemplateJobListThreadedHandler<tThreadWakeup, tJobListContainer>::Prepare
 }
 
 template<class tThreadWakeup, class tJobListContainer>
-unsigned dxtemplateJobListThreadedHandler<tThreadWakeup, tJobListContainer>::RetrieveActiveThreadsCount()
+unsigned dxtemplateJobListThreadedHandler<tThreadWakeup, tJobListContainer>::RetrieveActiveThreadCount()
 {
-    return GetActiveThreadsCount();
+    return GetActiveThreadCount();
 }
 
 template<class tThreadWakeup, class tJobListContainer>
@@ -977,14 +1061,11 @@ template<class tThreadWakeup, class tJobListContainer>
 void dxtemplateJobListThreadedHandler<tThreadWakeup, tJobListContainer>::PerformJobProcessingSession()
 {
     dxThreadedJobInfo *current_job = NULL;
-    bool job_result = false;
 
-    while (true)
+    for (bool job_result = false; ; )
     {
         bool last_job_flag;
-        current_job = m_job_list_ptr->ReleaseAJobAndPickNextPendingOne(current_job, job_result, &dxCallWait::AbstractSignalTheWait, last_job_flag);
-
-        if (!current_job)
+        if (!m_job_list_ptr->ReleaseAJobAndPickNextPendingOne(current_job, job_result, &dxCallWait::AbstractSignalTheWait, current_job, last_job_flag))
         {
             break;
         }
@@ -1002,13 +1083,40 @@ void dxtemplateJobListThreadedHandler<tThreadWakeup, tJobListContainer>::Perform
 template<class tThreadWakeup, class tJobListContainer>
 void dxtemplateJobListThreadedHandler<tThreadWakeup, tJobListContainer>::BlockAsIdleThread()
 {
-    m_processing_wakeup.WaitWakeup(NULL);
+    RegisterAsIdleThread();
+
+    for (; ; )
+    {
+        m_processing_wakeup.WaitWakeup(NULL);
+
+        if (IsShutdownRequested())
+        {
+            break;
+        }
+
+        bool extra_wakeup_is_needed;
+        if (UnregisterAsIdleThread(extra_wakeup_is_needed))
+        {
+            if (extra_wakeup_is_needed)
+            {
+                m_processing_wakeup.WakeupAThread();
+            }
+
+            break;
+        }
+    }
 }
 
 template<class tThreadWakeup, class tJobListContainer>
 void dxtemplateJobListThreadedHandler<tThreadWakeup, tJobListContainer>::ActivateAnIdleThread()
 {
-    m_processing_wakeup.WakeupAThread();
+    bool wakeup_is_needed;
+    RegisterForWakeupSignal(wakeup_is_needed);
+    
+    if (wakeup_is_needed)
+    {
+        m_processing_wakeup.WakeupAThread();
+    }
 }
 
 
@@ -1022,8 +1130,56 @@ void dxtemplateJobListThreadedHandler<tThreadWakeup, tJobListContainer>::Shutdow
 template<class tThreadWakeup, class tJobListContainer>
 void dxtemplateJobListThreadedHandler<tThreadWakeup, tJobListContainer>::CleanupForRestart()
 {
+    m_idle_thread_count = 0;
     m_shutdown_requested = false;
     m_processing_wakeup.ResetWakeup();
+}
+
+
+template<class tThreadWakeup, class tJobListContainer>
+bool dxtemplateJobListThreadedHandler<tThreadWakeup, tJobListContainer>::UnregisterAsIdleThread(bool &out_extra_wakeup_is_needed)
+{
+    bool result = false;
+
+    const unsigned wakeup_signal_bit = dxThreadingTraits::wakeup_signal_bit();
+    for (atomicord_t idle_thread_count = dxAtomicsProvider::UnorderedQueryTargetValue(&m_idle_thread_count);
+        idle_thread_count >= wakeup_signal_bit; idle_thread_count = dxAtomicsProvider::UnorderedQueryTargetValue(&m_idle_thread_count))
+    {
+        dIASSERT(idle_thread_count > wakeup_signal_bit);
+
+        atomicord_t new_idle_threads = idle_thread_count - wakeup_signal_bit - 1;
+        if (dxAtomicsProvider::CompareExchangeTargetValue(&m_idle_thread_count, idle_thread_count, new_idle_threads))
+        {
+            out_extra_wakeup_is_needed = new_idle_threads >= wakeup_signal_bit;
+            dIASSERT(!out_extra_wakeup_is_needed || new_idle_threads > wakeup_signal_bit);
+
+            result = true;
+            break;
+        }
+    }
+
+    return result;
+}
+
+
+template<class tThreadWakeup, class tJobListContainer>
+void dxtemplateJobListThreadedHandler<tThreadWakeup, tJobListContainer>::RegisterForWakeupSignal(bool &out_wakeup_is_needed)
+{
+    bool wakeup_is_needed = false;
+
+    const unsigned wakeup_signal_bit = dxThreadingTraits::wakeup_signal_bit();
+    for (atomicord_t idle_thread_count = dxAtomicsProvider::UnorderedQueryTargetValue(&m_idle_thread_count);
+        idle_thread_count % wakeup_signal_bit > idle_thread_count / wakeup_signal_bit; idle_thread_count = dxAtomicsProvider::UnorderedQueryTargetValue(&m_idle_thread_count))
+    {
+        atomicord_t new_idle_threads = idle_thread_count + wakeup_signal_bit;
+        if (dxAtomicsProvider::CompareExchangeTargetValue(&m_idle_thread_count, idle_thread_count, new_idle_threads))
+        {
+            wakeup_is_needed = idle_thread_count < wakeup_signal_bit;
+            break;
+        }
+    }
+
+    out_wakeup_is_needed = wakeup_is_needed;
 }
 
 
@@ -1048,7 +1204,7 @@ void dxtemplateJobListSelfHandler<tThreadWakeup, tJobListContainer>::PrepareForW
 
 
 template<class tThreadWakeup, class tJobListContainer>
-unsigned dxtemplateJobListSelfHandler<tThreadWakeup, tJobListContainer>::RetrieveActiveThreadsCount()
+unsigned dxtemplateJobListSelfHandler<tThreadWakeup, tJobListContainer>::RetrieveActiveThreadCount()
 {
     return 0U; // Return zero to indicate that there are no actual active threads provided.
 }
@@ -1072,14 +1228,11 @@ template<class tThreadWakeup, class tJobListContainer>
 void dxtemplateJobListSelfHandler<tThreadWakeup, tJobListContainer>::PerformJobProcessingSession()
 {
     dxThreadedJobInfo *current_job = NULL;
-    bool job_result = false;
 
-    while (true)
+    for (bool job_result = false; ; )
     {
         bool dummy_last_job_flag;
-        current_job = m_job_list_ptr->ReleaseAJobAndPickNextPendingOne(current_job, job_result, &dxCallWait::AbstractSignalTheWait, dummy_last_job_flag);
-
-        if (!current_job)
+        if (!m_job_list_ptr->ReleaseAJobAndPickNextPendingOne(current_job, job_result, &dxCallWait::AbstractSignalTheWait, current_job, dummy_last_job_flag))
         {
             break;
         }
@@ -1243,9 +1396,9 @@ void dxtemplateThreadingImplementation<tJobListContainer, tJobListHandler>::Wait
 
 
 template<class tJobListContainer, class tJobListHandler>
-unsigned dxtemplateThreadingImplementation<tJobListContainer, tJobListHandler>::RetrieveActiveThreadsCount()
+unsigned dxtemplateThreadingImplementation<tJobListContainer, tJobListHandler>::RetrieveActiveThreadCount()
 {
-    return m_list_handler.RetrieveActiveThreadsCount();
+    return m_list_handler.RetrieveActiveThreadCount();
 }
 
 template<class tJobListContainer, class tJobListHandler>
