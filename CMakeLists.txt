@@ -41,6 +41,7 @@ option(ODE_WITH_LIBCCD "Use libccd for handling some collision tests absent in O
 option(ODE_WITH_OPCODE "Use old OPCODE trimesh-trimesh collider." ON)
 option(ODE_WITH_OU "Use TLS for global caches (allows threaded collision checks for separated spaces)." OFF)
 option(ODE_WITH_TESTS "Builds the unit test application." ON)
+option(ODE_WIN32_LIB_OUTPUT_NAME_BASED_ON_FLOAT_SIZE "The output name of the library will be based on the size of float, on Windows." ON)
 
 cmake_dependent_option(ODE_WITH_LIBCCD_BOX_CYL "Use libccd for box-cylinder." ON "ODE_WITH_LIBCCD" OFF)
 cmake_dependent_option(ODE_WITH_LIBCCD_CAP_CYL "Use libccd for capsule-cylinder." ON "ODE_WITH_LIBCCD" OFF)
@@ -57,6 +58,11 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 else()
 	option(ODE_DOUBLE_PRECISION "Use double-precision math." ON)
 endif()
+
+set(ODE_WIN32_STATIC_LIB_POSTFIX_DEBUG "sd" CACHE STRING "The postfix to use when building the library as a static .lib on Windows in DEBUG.")
+set(ODE_WIN32_STATIC_LIB_POSTFIX_MINSIZEREL "s" CACHE STRING "The postfix to use when building the library as a static .lib on Windows in MINSIZEREL.")
+set(ODE_WIN32_STATIC_LIB_POSTFIX_RELEASE "s" CACHE STRING "The postfix to use when building the library as a static .lib on Windows in RELEASE.")
+set(ODE_WIN32_STATIC_LIB_POSTFIX_RELWITHDEBINFO "s" CACHE STRING "The postfix to use when building the library as a static .lib on Windows in RELWITHDEBINFO.")
 
 cmake_push_check_state(RESET)
 
@@ -502,7 +508,10 @@ list(
 	ou/src/ou/threadlocalstorage.cpp
 )
 
-add_library(ODE ${SRCS})
+# Makes life with Visual Studio easier (includes also the headers in the project):
+source_group( "SRCS" FILES ${SRCS} )
+source_group( "HDRS" FILES ${HDRS} )
+add_library(ODE ${SRCS} ${HDRS})
 
 set_target_properties(
 	ODE
@@ -517,20 +526,26 @@ if(WIN32)
 	if(BUILD_SHARED_LIBS)
 		set_target_properties(ODE PROPERTIES DEBUG_POSTFIX d)
 	else()
-		set_target_properties(
-			ODE
-			PROPERTIES
-			DEBUG_POSTFIX sd
-			MINSIZEREL_POSTFIX s
-			RELEASE_POSTFIX s
-			RELWITHDEBINFO_POSTFIX s
-		)
+		if(ODE_WIN32_STATIC_LIB_POSTFIX_DEBUG)
+			set_target_properties(ODE PROPERTIES DEBUG_POSTFIX ${ODE_WIN32_STATIC_LIB_POSTFIX_DEBUG})
+		endif()
+		if(ODE_WIN32_STATIC_LIB_POSTFIX_MINSIZEREL)
+			set_target_properties(ODE PROPERTIES MINSIZEREL_POSTFIX ${ODE_WIN32_STATIC_LIB_POSTFIX_MINSIZEREL} )
+		endif()
+		if(ODE_WIN32_STATIC_LIB_POSTFIX_RELEASE)
+			set_target_properties(ODE PROPERTIES RELEASE_POSTFIX ${ODE_WIN32_STATIC_LIB_POSTFIX_RELEASE})
+		endif()
+		if(ODE_WIN32_STATIC_LIB_POSTFIX_RELWITHDEBINFO)
+			set_target_properties(ODE PROPERTIES RELWITHDEBINFO_POSTFIX ${ODE_WIN32_STATIC_LIB_POSTFIX_RELWITHDEBINFO})
+		endif()
 	endif()
 	
-	if(ODE_DOUBLE_PRECISION)
-		set_target_properties(ODE PROPERTIES OUTPUT_NAME ode_double)
-	else()
-		set_target_properties(ODE PROPERTIES OUTPUT_NAME ode_single)
+	if(ODE_WIN32_LIB_OUTPUT_NAME_BASED_ON_FLOAT_SIZE)
+		if(ODE_DOUBLE_PRECISION)
+			set_target_properties(ODE PROPERTIES OUTPUT_NAME ode_double)
+		else()
+			set_target_properties(ODE PROPERTIES OUTPUT_NAME ode_single)
+		endif()
 	endif()
 endif()
 
