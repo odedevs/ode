@@ -283,7 +283,7 @@ public:
 
 private:
     dxThreadingBase                   *m_threading_base;
-    dMutexGroupID                   m_mutex_group;
+    dMutexGroupID                     m_mutex_group;
     dmutexindex_t                     m_mutex_index;
     bool                              m_mutex_locked;
 };

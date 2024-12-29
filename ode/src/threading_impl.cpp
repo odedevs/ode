@@ -89,7 +89,8 @@ static const dxThreadingFunctionsInfo g_builtin_threading_functions =
 };
 
 
-/*extern */dThreadingImplementationID dThreadingAllocateSelfThreadedImplementation()
+/*extern */
+dThreadingImplementationID dThreadingAllocateSelfThreadedImplementation()
 {
     dxSelfThreadedThreading *threading = new dxSelfThreadedThreading();
 
@@ -103,7 +104,8 @@ static const dxThreadingFunctionsInfo g_builtin_threading_functions =
     return (dThreadingImplementationID)impl;
 }
 
-/*extern */dThreadingImplementationID dThreadingAllocateMultiThreadedImplementation()
+/*extern */
+dThreadingImplementationID dThreadingAllocateMultiThreadedImplementation()
 {
 #if dBUILTIN_THREADING_IMPL_ENABLED
     dxMultiThreadedThreading *threading = new dxMultiThreadedThreading();
@@ -121,7 +123,8 @@ static const dxThreadingFunctionsInfo g_builtin_threading_functions =
     return (dThreadingImplementationID)impl;
 }
 
-/*extern */const dThreadingFunctionsInfo *dThreadingImplementationGetFunctions(dThreadingImplementationID impl)
+/*extern */
+const dThreadingFunctionsInfo *dThreadingImplementationGetFunctions(dThreadingImplementationID impl)
 {
 #if dBUILTIN_THREADING_IMPL_ENABLED
     dAASSERT(impl != NULL);
@@ -139,7 +142,8 @@ static const dxThreadingFunctionsInfo g_builtin_threading_functions =
     return functions;
 }
 
-/*extern */void dThreadingImplementationShutdownProcessing(dThreadingImplementationID impl)
+/*extern */
+void dThreadingImplementationShutdownProcessing(dThreadingImplementationID impl)
 {
 #if dBUILTIN_THREADING_IMPL_ENABLED
     dAASSERT(impl != NULL);
@@ -153,7 +157,8 @@ static const dxThreadingFunctionsInfo g_builtin_threading_functions =
     }
 }
 
-/*extern */void dThreadingImplementationCleanupForRestart(dThreadingImplementationID impl)
+/*extern */
+void dThreadingImplementationCleanupForRestart(dThreadingImplementationID impl)
 {
 #if dBUILTIN_THREADING_IMPL_ENABLED
     dAASSERT(impl != NULL);
@@ -176,8 +181,9 @@ static const dxThreadingFunctionsInfo g_builtin_threading_functions =
 }
 
 
-/*extern */void dExternalThreadingServeMultiThreadedImplementation(dThreadingImplementationID impl, 
-                                                                   dThreadReadyToServeCallback *readiness_callback/*=NULL*/, void *callback_context/*=NULL*/)
+/*extern */
+void dExternalThreadingServeMultiThreadedImplementation(dThreadingImplementationID impl, 
+    dThreadReadyToServeCallback *readiness_callback/*=NULL*/, void *callback_context/*=NULL*/)
 {
 #if dBUILTIN_THREADING_IMPL_ENABLED
     dAASSERT(impl != NULL);
@@ -194,53 +200,62 @@ static const dxThreadingFunctionsInfo g_builtin_threading_functions =
 
 //////////////////////////////////////////////////////////////////////////
 
-static dMutexGroupID AllocMutexGroup(dThreadingImplementationID impl, dmutexindex_t Mutex_count, const char *const *Mutex_names_ptr/*=NULL*/)
+static 
+dMutexGroupID AllocMutexGroup(dThreadingImplementationID impl, dmutexindex_t Mutex_count, const char *const *Mutex_names_ptr/*=NULL*/)
 {
     (void)Mutex_names_ptr; // unused
     dIMutexGroup *mutex_group = ((dxIThreadingImplementation *)impl)->AllocMutexGroup(Mutex_count);
     return (dMutexGroupID)mutex_group;
 }
 
-static void FreeMutexGroup(dThreadingImplementationID impl, dMutexGroupID mutex_group)
+static 
+void FreeMutexGroup(dThreadingImplementationID impl, dMutexGroupID mutex_group)
 {
     ((dxIThreadingImplementation *)impl)->FreeMutexGroup((dIMutexGroup *)mutex_group);
 }
 
-static void LockMutexGroupMutex(dThreadingImplementationID impl, dMutexGroupID mutex_group, dmutexindex_t mutex_index)
+static 
+void LockMutexGroupMutex(dThreadingImplementationID impl, dMutexGroupID mutex_group, dmutexindex_t mutex_index)
 {
     ((dxIThreadingImplementation *)impl)->LockMutexGroupMutex((dIMutexGroup *)mutex_group, mutex_index);
 }
 
-// static int TryLockMutexGroupMutex(dThreadingImplementationID impl, dMutexGroupID mutex_group, dmutexindex_t mutex_index)
+// static 
+// int TryLockMutexGroupMutex(dThreadingImplementationID impl, dMutexGroupID mutex_group, dmutexindex_t mutex_index)
 // {
 //   bool trylock_result = ((dxIThreadingImplementation *)impl)->TryLockMutexGroupMutex((dIMutexGroup *)mutex_group, mutex_index);
 //   return trylock_result;
 // }
 
-static void UnlockMutexGroupMutex(dThreadingImplementationID impl, dMutexGroupID mutex_group, dmutexindex_t mutex_index)
+static 
+void UnlockMutexGroupMutex(dThreadingImplementationID impl, dMutexGroupID mutex_group, dmutexindex_t mutex_index)
 {
     ((dxIThreadingImplementation *)impl)->UnlockMutexGroupMutex((dIMutexGroup *)mutex_group, mutex_index);
 }
 
 
-static dCallWaitID AllocThreadedCallWait(dThreadingImplementationID impl)
+static 
+dCallWaitID AllocThreadedCallWait(dThreadingImplementationID impl)
 {
     dxICallWait *call_wait = ((dxIThreadingImplementation *)impl)->AllocACallWait();
     return (dCallWaitID)call_wait;
 }
 
-static void ResetThreadedCallWait(dThreadingImplementationID impl, dCallWaitID call_wait)
+static 
+void ResetThreadedCallWait(dThreadingImplementationID impl, dCallWaitID call_wait)
 {
     ((dxIThreadingImplementation *)impl)->ResetACallWait((dxICallWait *)call_wait);
 }
 
-static void FreeThreadedCallWait(dThreadingImplementationID impl, dCallWaitID call_wait)
+static 
+void FreeThreadedCallWait(dThreadingImplementationID impl, dCallWaitID call_wait)
 {
     ((dxIThreadingImplementation *)impl)->FreeACallWait((dxICallWait *)call_wait);
 }
 
 
-static void PostThreadedCall(
+static 
+void PostThreadedCall(
     dThreadingImplementationID impl, int *out_summary_fault/*=NULL*/, 
     dCallReleaseeID *out_post_releasee/*=NULL*/, ddependencycount_t dependencies_count, dCallReleaseeID dependent_releasee/*=NULL*/, 
     dCallWaitID call_wait/*=NULL*/, 
@@ -252,14 +267,16 @@ static void PostThreadedCall(
         dependencies_count, dependent_releasee, (dxICallWait *)call_wait, call_func, call_context, instance_index);
 }
 
-static void AlterThreadedCallDependenciesCount(
+static 
+void AlterThreadedCallDependenciesCount(
     dThreadingImplementationID impl, dCallReleaseeID target_releasee, 
     ddependencychange_t dependencies_count_change)
 {
     ((dxIThreadingImplementation *)impl)->AlterJobDependenciesCount(target_releasee, dependencies_count_change);
 }
 
-static void WaitThreadedCall(
+static 
+void WaitThreadedCall(
     dThreadingImplementationID impl, int *out_wait_status/*=NULL*/, 
     dCallWaitID call_wait, const dThreadedWaitTime *timeout_time_ptr/*=NULL*/, 
     const char *wait_name/*=NULL*/)
@@ -269,14 +286,15 @@ static void WaitThreadedCall(
 }
 
 
-static unsigned RetrieveThreadingThreadCount(dThreadingImplementationID impl)
+static 
+unsigned RetrieveThreadingThreadCount(dThreadingImplementationID impl)
 {
     return ((dxIThreadingImplementation *)impl)->RetrieveActiveThreadCount();
 }
 
-static int PreallocateResourcesForThreadedCalls(dThreadingImplementationID impl, ddependencycount_t max_simultaneous_calls_estimate)
+static 
+int PreallocateResourcesForThreadedCalls(dThreadingImplementationID impl, ddependencycount_t max_simultaneous_calls_estimate)
 {
     return ((dxIThreadingImplementation *)impl)->PreallocateJobInfos(max_simultaneous_calls_estimate);
 }
-
 
