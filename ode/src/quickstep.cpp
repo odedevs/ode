@@ -1788,7 +1788,7 @@ void dxQuickStepIsland_Stage3(dxQuickStepperStage3CallContext *stage3CallContext
         last_lambda = memarena->AllocateArray<dReal>(m);
 #endif
 
-        const unsigned allowedThreads = callContext->m_stepperAllowedThreads;
+        const unsigned allowedThreads = callContext->m_lcpAllowedThreads;
         bool singleThreadedExecution = allowedThreads == 1;
         dIASSERT(allowedThreads >= 1);
 
@@ -1975,7 +1975,7 @@ int dxQuickStepIsland_Stage4LCP_iMJSync_Callback(void *_stage4CallContext, dcall
     const dxQuickStepperLocalContext *localContext = stage4CallContext->m_localContext;
     
     unsigned int m = localContext->m_m;
-    const unsigned allowedThreads = callContext->m_stepperAllowedThreads;
+    const unsigned allowedThreads = dMAX(callContext->m_stepperAllowedThreads, callContext->m_lcpAllowedThreads);
 
     unsigned int stage4LCP_Ad_allowedThreads = CalculateOptimalThreadsCount<dxQUICKSTEPISLAND_STAGE4LCP_AD_STEP>(m, allowedThreads);
 
@@ -2012,7 +2012,7 @@ int dxQuickStepIsland_Stage4LCP_fcStart_Callback(void *_stage4CallContext, dcall
     fcPrepareComplexity = localContext->m_m;
     fcCompleteComplexity = 0;
 #endif
-    const unsigned allowedThreads = callContext->m_stepperAllowedThreads;
+    const unsigned allowedThreads = callContext->m_lcpAllowedThreads;
     unsigned int stage4LCP_fcPrepare_allowedThreads = CalculateOptimalThreadsCount<dxQUICKSTEPISLAND_STAGE4LCP_FC_STEP>(fcPrepareComplexity, allowedThreads);
     unsigned int stage4LCP_fcComplete_allowedThreads = CalculateOptimalThreadsCount<dxQUICKSTEPISLAND_STAGE4LCP_FC_STEP>(fcCompleteComplexity, allowedThreads);
     stage4CallContext->AssignLCP_fcAllowedThreads(stage4LCP_fcPrepare_allowedThreads, stage4LCP_fcComplete_allowedThreads);
@@ -2342,7 +2342,7 @@ int dxQuickStepIsland_Stage4LCP_IterationStart_Callback(void *_stage4CallContext
 
         if (reorderRequired) {
             const unsigned int reorderThreads = 2;
-            dIASSERT(callContext->m_stepperAllowedThreads >= 2); // Otherwise the single-threaded execution path would be taken
+            dIASSERT(callContext->m_lcpAllowedThreads >= 2); // Otherwise the single-threaded execution path would be taken
 
             stage4CallContext->ResetSOR_ConstraintsReorderVariables(reorderThreads);
 
@@ -2951,7 +2951,7 @@ int dxQuickStepIsland_Stage4LCP_IterationSync_Callback(void *_stage4CallContext,
     
     unsigned int stage4b_allowedThreads = 1;
     if (IsStage4bJointInfosIterationRequired(localContext)) {
-        unsigned int allowedThreads = callContext->m_stepperAllowedThreads;
+        unsigned int allowedThreads = dMAX(callContext->m_stepperAllowedThreads, callContext->m_lcpAllowedThreads);
         dIASSERT(allowedThreads >= stage4b_allowedThreads);
         stage4b_allowedThreads += CalculateOptimalThreadsCount<dxQUICKSTEPISLAND_STAGE4B_STEP>(localContext->m_nj, allowedThreads - stage4b_allowedThreads);
     }
@@ -3377,13 +3377,14 @@ sizeint dxEstimateQuickStepMemoryRequirements (dxBody * const *body,
 }
 
 /*extern */
-unsigned dxEstimateQuickStepMaxCallCount(unsigned activeThreadCount, unsigned allowedThreadCount)
+unsigned dxEstimateQuickStepMaxCallCount(unsigned activeThreadCount, unsigned steppingAllowedThreadCount, unsigned lcpAllowedThreadCount)
 {
     (void)activeThreadCount; // unused
+    unsigned maxAllowedThreadCount = dMAX(steppingAllowedThreadCount, lcpAllowedThreadCount);
     unsigned result = 1 // dxQuickStepIsland itself
-        + 5 + (2 * allowedThreadCount + 1) // for Stage4 related schedules
+        + 5 + (2 * maxAllowedThreadCount + 1) // for Stage4 related schedules
         + 1 // dxStepIsland_Stage5
-        + allowedThreadCount; // Reserve
+        + maxAllowedThreadCount; // Reserve
     return result;
 }
 

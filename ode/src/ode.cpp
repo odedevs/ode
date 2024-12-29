@@ -1681,6 +1681,49 @@ dReal dWorldGetCFM (dWorldID w)
 }
 
 
+void dWorldSetSteppingThreadingParameters(dWorldID w, const dWorldSteppingThreadingParameters *ptr_params)
+{
+    dAASSERT(w);
+    dAASSERT(ptr_params);
+
+    unsigned param_set = ptr_params->param_set;
+
+    if ((param_set & dWSTP_WorldIslandsIterationMaxThreads) != 0)
+    {
+        w->islands_max_threads = ptr_params->world_islands_iteration_max_threads;
+    }
+
+    if ((param_set & dWSTP_IslandSteppingMaxThreads) != 0)
+    {
+        w->stepping_max_threads = ptr_params->island_stepping_max_threads;
+    }
+
+    if ((param_set & dWSTP_LCPSolvingMaxThreads) != 0)
+    {
+        w->solving_max_threads = ptr_params->lcp_solving_max_threads;
+    }
+}
+
+void dWorldGetSteppingThreadingParameters(dWorldID w, dWorldSteppingThreadingParameters *ptr_params)
+{
+    unsigned param_set = ptr_params->param_set;
+
+    if ((param_set & dWSTP_WorldIslandsIterationMaxThreads) != 0)
+    {
+        ptr_params->world_islands_iteration_max_threads = w->islands_max_threads;
+    }
+
+    if ((param_set & dWSTP_IslandSteppingMaxThreads) != 0)
+    {
+        ptr_params->island_stepping_max_threads = w->stepping_max_threads;
+    }
+
+    if ((param_set & dWSTP_LCPSolvingMaxThreads) != 0)
+    {
+        ptr_params->lcp_solving_max_threads = w->solving_max_threads;
+    }
+}
+
 void dWorldSetStepIslandsProcessingMaxThreadCount(dWorldID w, unsigned count)
 {
     dAASSERT (w);

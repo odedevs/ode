@@ -136,6 +136,77 @@ ODE_API dReal dWorldGetCFM (dWorldID);
 
 #define dWORLDSTEP_THREADCOUNT_UNLIMITED	dTHREADING_THREAD_COUNT_UNLIMITED
 
+enum
+{
+    dWSTP_WorldIslandsIterationMaxThreads = 0x001,      /**< Thread count limit for parallel island iteration */
+    dWSTP_IslandSteppingMaxThreads = 0x002,      /**< Thread count limit for stepping each individual island being iterated */
+    dWSTP_LCPSolvingMaxThreads = 0x004,      /**< Thread count limit for solving QuickStep/Step LCP */
+};
+
+
+typedef struct dWorldSteppingThreadingParameters
+{
+    /* must always be defined */
+    unsigned   param_set; /**< Combination of dWSTP_... flags */
+    unsigned   world_islands_iteration_max_threads;
+    unsigned   island_stepping_max_threads;
+    unsigned   lcp_solving_max_threads;
+
+} dWorldSteppingThreadingParameters;
+
+/**
+* @brief Set threading parameters to be used for world stepping
+*
+* The function sets parameters defined by bits in @p dWorldSteppingThreadingParameters::param_set
+* leaving other parameters unchanged. The actual number of threads that is going to be used will be the minimum
+* of a specific limit and the number of threads in the thread pool.
+*
+* By default, for @p dWorldSteppingThreadingParameters::world_islands_iteration_max_threads
+* and @p dWorldSteppingThreadingParameters::island_stepping_max_threads there is no limit (@c dWORLDSTEP_THREADCOUNT_UNLIMITED);
+* for @p dWorldSteppingThreadingParameters::lcp_solving_max_threads the default limit is 1 thread (as the single threaded variant 
+* appears to perform much better). These defaults may change in future releases.
+* 
+* The parameters act in the manner that world_islands_iteration_max_threads are used to iterate islands within the world. Then, for each island,
+* up to island_stepping_max_threads are used to prepare inputs and distribute results while up to lcp_solving_max_threads are used for solving the LCP itself.
+* Roughly, the total number of active threads could be up to world_islands_iteration_max_threads * MAX(island_stepping_max_threads, lcp_solving_max_threads)
+* if there is a sufficient number of threads available in the thread pool assigned for the world.
+* 
+* @note
+* Note that in current implementation @fn dWorldStep suppports single threaded LCP solving only and the lcp_solving_max_threads parameter has no effect for it.
+* 
+* @note
+* world_islands_iteration_max_threads is the parameter set with @fn dWorldSetStepIslandsProcessingMaxThreadCount
+* 
+* @warning
+* WARNING! Iterating islands in multiple threads requires allocating 
+* individual stepping memory buffer for each of those threads. The size of buffers
+* allocated is the size needed to handle the largest island in the world.
+*
+* @param w The world affected
+* @param ptr_params Pointer to structure of type @c dWorldSteppingThreadingParameters
+* @ingroup world
+* @see dWorldGetSteppingThreadingParameters
+* @see dWorldSetStepIslandsProcessingMaxThreadCount
+*/
+ODE_API void dWorldSetSteppingThreadingParameters(dWorldID w, const dWorldSteppingThreadingParameters *ptr_params);
+
+/**
+* @brief Obtain threading parameters used for world stepping
+*
+* The function retrieves parameters defined by bits in @p dWorldSteppingThreadingParameters::param_set.
+*
+* @note
+* world_islands_iteration_max_threads is the parameter returned by @fn dWorldGetStepIslandsProcessingMaxThreadCount
+*
+* @param w The world queried
+* @param ptr_params Pointer to structure of type @c dWorldSteppingThreadingParameters; the structure must have its param_set field initialized
+* @ingroup world
+* @see dWorldSetSteppingThreadingParameters
+* @see dWorldGetStepIslandsProcessingMaxThreadCount
+*/
+ODE_API void dWorldGetSteppingThreadingParameters(dWorldID w, dWorldSteppingThreadingParameters *ptr_params);
+
+
 /**
  * @brief Set maximum threads to be used for island stepping
  *

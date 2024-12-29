@@ -92,6 +92,8 @@ dxWorld::dxWorld():
     adis(NULL),
     body_flags(0),
     islands_max_threads(dWORLDSTEP_THREADCOUNT_UNLIMITED),
+    stepping_max_threads(dWORLDSTEP_THREADCOUNT_UNLIMITED),
+    solving_max_threads(1),
     wmem(NULL),
     qs(NULL),
     contactp(NULL),
