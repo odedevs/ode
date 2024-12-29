@@ -280,11 +280,12 @@ private:
 
 struct dxStepperProcessingCallContext
 {
-    dxStepperProcessingCallContext(dxWorld *world, dReal stepSize, unsigned stepperAllowedThreads, 
+    dxStepperProcessingCallContext(dxWorld *world, dReal stepSize, unsigned stepperAllowedThreads, unsigned lcpAllowedThreads,
         dxWorldProcessMemArena *stepperArena, dxBody *const *islandBodiesStart, dxJoint *const *islandJointsStart): 
         m_world(world), m_stepSize(stepSize), m_stepperArena(stepperArena), m_finalReleasee(NULL), 
         m_islandBodiesStart(islandBodiesStart), m_islandJointsStart(islandJointsStart), m_islandBodiesCount(0), m_islandJointsCount(0),
-        m_stepperAllowedThreads(stepperAllowedThreads)
+        m_stepperAllowedThreads(stepperAllowedThreads),
+        m_lcpAllowedThreads(lcpAllowedThreads)
     {
     }
 
@@ -314,13 +315,14 @@ struct dxStepperProcessingCallContext
     unsigned                m_islandBodiesCount;
     unsigned                m_islandJointsCount;
     unsigned                m_stepperAllowedThreads;
+    unsigned                m_lcpAllowedThreads;
 };
 
 #define BEGIN_STATE_SAVE(memarena, state) void *state = memarena->SaveState();
 #define END_STATE_SAVE(memarena, state) memarena->RestoreState(state)
 
 typedef void (*dstepper_fn_t) (const dxStepperProcessingCallContext *callContext);
-typedef unsigned (*dmaxcallcountestimate_fn_t) (unsigned activeThreadCount, unsigned allowedThreadCount);
+typedef unsigned (*dmaxcallcountestimate_fn_t) (unsigned activeThreadCount, unsigned steppingAllowedThreadCount, unsigned lcpAllowedThreadCount);
 
 bool dxProcessIslands (dxWorld *world, const dxWorldProcessIslandsInfo &islandsInfo, 
                        dReal stepSize, dstepper_fn_t stepper, dmaxcallcountestimate_fn_t maxCallCountEstimator);

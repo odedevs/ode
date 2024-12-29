@@ -8,6 +8,12 @@ the rules for this file:
   * keep the format consistent (79 char width, M/D/Y date format).
 
 ------------------------------------------------------------------------------
+01/05/2025 Oleh Derevenko
+        * Threading support classes were optimized and new parameter that 
+          control world stepping introduced. By default, LCP solving was 
+          changed to use single-threaded variant as that appeared to perform
+          much better.
+
 03/26/2024 Oleh Derevenko
         * Autotools build scripts, when configured with "--enable-libccd",
           will now assign all the relevant colliders to the libccd. 

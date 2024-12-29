@@ -255,13 +255,25 @@ public:
 
     void assignThreadingImpl(const dxThreadingFunctionsInfo *functions_info, dThreadingImplementationID threading_impl);
 
-    unsigned calculateIslandProcessingMaxThreadCount(unsigned *ptrOut_activeThreadCount = NULL) const
+    unsigned calculateIslandIterationMaxThreadCount(unsigned *ptrOut_activeThreadCount = NULL) const
     {
         unsigned activeThreadCount, *ptrActiveThreadCountToUse = ptrOut_activeThreadCount != NULL ? &activeThreadCount : NULL;
         unsigned limitedCount = calculateThreadingLimitedThreadCount(islands_max_threads, false, ptrActiveThreadCountToUse);
         if (ptrOut_activeThreadCount != NULL) {
             *ptrOut_activeThreadCount = dMACRO_MAX(activeThreadCount, 1U);
         }
+        return dMACRO_MAX(limitedCount, 1U);
+    }
+
+    unsigned calculatePerIslandSteppingMaxThreadCount() const
+    {
+        unsigned limitedCount = calculateThreadingLimitedThreadCount(stepping_max_threads, false);
+        return dMACRO_MAX(limitedCount, 1U);
+    }
+
+    unsigned calculatePerIslandSolvingMaxThreadCount() const
+    {
+        unsigned limitedCount = calculateThreadingLimitedThreadCount(solving_max_threads, false);
         return dMACRO_MAX(limitedCount, 1U);
     }
 
@@ -280,6 +292,8 @@ public:
     dxAutoDisable adis;		// auto-disable parameters
     int body_flags;               // flags for new bodies
     unsigned islands_max_threads; // maximum threads to allocate for island processing
+    unsigned stepping_max_threads; // maximum threads to allocate for stepping each island
+    unsigned solving_max_threads; // maximum threads to allocate for solving equation systems
     dxStepWorkingMemory *wmem; // Working memory object for dWorldStep/dWorldQuickStep
 
     dxQuickStepParameters qs;
