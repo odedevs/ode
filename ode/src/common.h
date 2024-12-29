@@ -113,8 +113,13 @@
  * two. this is set to 16 by default.
  */
 #ifndef EFFICIENT_ALIGNMENT
-#define EFFICIENT_ALIGNMENT 16
+#define EFFICIENT_ALIGNMENT       16U
 #endif
+
+#ifndef COMMON_CACHELINE_SIZE
+#define COMMON_CACHELINE_SIZE     128U
+#endif
+
 
 #define dALIGN_SIZE(buf_size, alignment) (((buf_size) + (alignment - 1)) & (int)(~(alignment - 1))) // Casting the mask to int ensures sign-extension to larger integer sizes
 #define dALIGN_PTR(buf_ptr, alignment) ((void *)(((uintptr)(buf_ptr) + ((alignment) - 1)) & (int)(~(alignment - 1)))) // Casting the mask to int ensures sign-extension to larger integer sizes
