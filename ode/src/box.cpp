@@ -766,9 +766,8 @@ int dCollideBoxBox (dxGeom *o1, dxGeom *o2, int flags,
     return num;
 }
 
-
-int dCollideBoxPlane (dxGeom *o1, dxGeom *o2,
-                      int flags, dContactGeom *contact, int skip)
+int dCollideBoxPlaneOld(dxGeom *o1, dxGeom *o2,
+                        int flags, dContactGeom *contact, int skip)
 {
     dIASSERT (skip >= (int)sizeof(dContactGeom));
     dIASSERT (o1->type == dBoxClass);
@@ -901,3 +900,262 @@ done:
     }
     return ret;
 }
+
+// Fill in the the non-varying contact info for the first contactCount contacts.
+static inline void finishBoxPlaneContacts(unsigned contactCount, dContactGeom *&contact, int skip, dxGeom *o1, dxGeom *o2, const dReal *normal);
+
+int dCollideBoxPlane(dxGeom *o1, dxGeom *o2,
+                     int flags, dContactGeom *contact, int skip)
+{
+    dIASSERT(skip >= (int)sizeof(dContactGeom));
+    dIASSERT(o1->type == dBoxClass);
+    dIASSERT(o2->type == dPlaneClass);
+    dIASSERT((flags & NUMC_MASK) >= 1);
+
+    dxBox *box = (dxBox *)o1;
+    dxPlane *plane = (dxPlane *)o2;
+
+    //@@@ problem: using 4-vector (plane->p) as 3-vector (normal).
+    const dReal *normal = plane->p;          // normal vector
+
+    // The number of contacts found.
+    unsigned nContactsFound = 0;
+
+    do
+    {
+        const dReal *R = box->final_posr->R; // rotation of box
+
+        // project sides lengths along normal vector, get absolute values
+        // A[i] will be the reduction in depth resulting from moving in direction i by an amount of side[i].
+        const dReal Q0 = dCalcVectorDot3_14(normal, R + 0);
+        const dReal Q1 = dCalcVectorDot3_14(normal, R + 1);
+        const dReal Q2 = dCalcVectorDot3_14(normal, R + 2);
+        const dReal *const side = box->side;
+        const dVector3 A = {side[0] * Q0, side[1] * Q1, side[2] * Q2};
+
+        // Find centerDepth
+        const dReal centerDepth = plane->p[3] - dCalcVectorDot3(normal, box->final_posr->pos);
+
+        // The depths (positive = deeper) of the 8 vertices will be:
+        //
+        // centerDepth - 0.5*(+/- A[0] +/- A[1] +/- A[2])
+        //
+        // for the 8 combinations of +/-.
+
+        // What we'd *really* like is to get the vertices in depth order (deepest first), so that we can
+        // easily return the maxc deepest vertices and also return early once we get to a vertex with a
+        // negative depth. To achieve that efficiently, it will turn out to be useful to use |A[s]|
+        // instead of A[s] when computing the depths. We store that in B.
+        dVector3 B = {dFabs(A[0]), dFabs(A[1]), dFabs(A[2])};
+
+        // Note that A[s]=sgn(A[s])*B[s]. That means that the depths are
+        // given by:
+        //
+        // centerDepth - 0.5*(+/- sgn(A[0])*B[0] +/- sgn(A[1])*B[1] +/- sgn(A[2])*B[2])
+        //
+        // The depth of the deepest vertex is achieved when the choice of + or - is opposite the
+        // corresponding sgn() function. That will lead to the depth of the deepest vertex being:
+        dReal firstContactDepth = centerDepth + REAL(0.5) * (B[0] + B[1] + B[2]);
+
+        // If that isn't below the plane, there is no collision and we can return immediately.
+        if (firstContactDepth < 0)
+        {
+            break;
+        }
+
+        // The number of contacts requested. We can't return more than this many.
+        const unsigned maxc = flags & NUMC_MASK;
+        dIASSERT(maxc != 0);
+
+        // Otherwise, we need to figure out the position of the vertex, and potentially other vertices.
+
+        // Let p be the center point of the box.
+        const dVector3 p = {box->final_posr->pos[0], box->final_posr->pos[1], box->final_posr->pos[2]};
+
+        // To compute the positions of each of the 8 vertices, note that side[s]*R[4*c+s] is the change
+        // in coordinate c associated with moving along the full length of side s. As a result, the cth
+        // coord of the vertices are given by:
+        //
+        // p[c] +/- 0.5*side[0]*R[4*c+0] +/- 0.5*side[1]*R[4*c+1] +/- 0.5*side[2]*R[4*c+2]
+        //
+        // for c in 0, 1, 2, and all 8 combinations of +/- where the choices for +/- for a vertex match
+        // the choices when computing the depth of the vertex:
+        //
+        // centerDepth - 0.5*(+/- sgn(A[0])*B[0] +/- sgn(A[1])*B[1] +/- sgn(A[2])*B[2])
+        //
+        // Since the sgn() function will just flip or not flip the +/- to a -/+, and we just need to
+        // keep the choices consistent between the computations of the vertices' depths and the
+        // positions, we can move the sgn() to the computation of the coords to get:
+        //
+        // centerDepth - 0.5*(+/- B[0] +/- B[1] +/- B[2])
+        //
+        // and:
+        //
+        // p[c] +/- 0.5*sgn(A[0])*side[0]*R[4*c+0] +/- 0.5*sgn(A[1])*side[1]*R[4*c+1] +/-
+        // 0.5*sgn(A[2])*side[2]*R[4*c+2]
+        //
+        // We can precompute signedHalfSides[s]=0.5*sgn(A[s])*side[s] and
+        // signedHalfSideVectors[s][c]=signedHalfSides[s]*R[4*s+c]
+        const dVector3 signedHalfSides = {
+            dCopySign(0.5, A[0]) * side[0],
+            dCopySign(0.5, A[1]) * side[1],
+            dCopySign(0.5, A[2]) * side[2],
+        };
+
+        const dVector3 signedHalfSideVectors[3] = {
+            {signedHalfSides[0] * R[0 + 0], signedHalfSides[0] * R[4 + 0], signedHalfSides[0] * R[8 + 0]},
+            {signedHalfSides[1] * R[0 + 1], signedHalfSides[1] * R[4 + 1], signedHalfSides[1] * R[8 + 1]},
+            {signedHalfSides[2] * R[0 + 2], signedHalfSides[2] * R[4 + 2], signedHalfSides[2] * R[8 + 2]},
+        };
+
+        // Now the vertices are given by:
+        //
+        // p[c] +/- signedHalfSides[0]*R[4*c+0] +/- signedHalfSides[1]*R[4*c+1] +/-
+        // signedHalfSides[2]*R[4*c+2]
+        //
+        // The deepest vertex corresponds to always choosing "-". So we can fill it in right away.
+        {
+            dContactGeom *currContact = contact; dIASSERT(contact == CONTACT(contact, nContactsFound * skip));
+            currContact->pos[0] = p[0] - signedHalfSideVectors[2][0] - signedHalfSideVectors[1][0] - signedHalfSideVectors[0][0];
+            currContact->pos[1] = p[1] - signedHalfSideVectors[2][1] - signedHalfSideVectors[1][1] - signedHalfSideVectors[0][1];
+            currContact->pos[2] = p[2] - signedHalfSideVectors[2][2] - signedHalfSideVectors[1][2] - signedHalfSideVectors[0][2];
+            currContact->depth = firstContactDepth;
+            if (++nContactsFound == maxc)
+            {
+                break;
+            }
+        }
+
+        // The second deepest will correspond to choosing the - option for all but the smallest B[s].
+        // That corresponds to moving along the edge that causes the least change in depth. The third
+        // deepest will correspond to choosing the - option for all but the second smallest B[s]. The
+        // least, second least, and third *least* deep can be found similarly. So the ranks of 6 of the
+        // 8 vertices can be determined in this way. The only remaining ambiguity is which of the 2
+        // other vertices is deeper, which we will handle later.
+        //
+        // To compute the vertices and depths efficiently in the desired order, we will presort the
+        // sides and their corresponding Bs in ascending order of the Bs and we will precompute each of
+        // the signedHalfSide[s]*R[4*c+s] terms as follows:
+        //
+        // Let minSide, midSide, maxSide be the indices of the sides such that
+        // B[minSide]<=B[midSide]<=B[maxSide]
+        //
+        // Let orderedB[0]=B[minSide], orderedB[1]=B[midSide], and orderedB[2]=B[maxSide]
+        //
+        // and:
+        //
+        // orderedSignedHalfSideVectors[0][c] = signedHalfSideVectors[minSide]
+        // orderedSignedHalfSideVectors[1][c] = signedHalfSideVectors[midSide]
+        // orderedSignedHalfSideVectors[2][c] = signedHalfSideVectors[maxSide]
+        //
+        // The positions of the vertices will then be:
+        //
+        // p[c] +/- orderedHalfSideVector[0][c] +/- orderedHalfSideVector[1][c] +/-
+        // orderedHalfSideVector[2][c]
+        //
+        // and the corresponding depths:
+        //
+        // centerDepth - 0.5*(+/- orderedB[0] +/- orderedB[1] +/- orderedB[2])
+        //
+        // We will call the following macro with the various +/- combos to compute the depth of a
+        // vertex, add it to the contacts if it is inside and stop early if it isn't or we've found
+        // the requested number of contacts.
+#define ADD_VERTEX_IF_INSIDE(op1, op2, op3)                                                                                                              \
+{                                                                                                                                                        \
+    dReal contactDepth = (centerDepth - REAL(0.5) * (op3 orderedB[2] op2 orderedB[1] op1 orderedB[0]));                                                  \
+    if (contactDepth < 0.0)                                                                                                                              \
+    {                                                                                                                                                    \
+        break;                                                                                                                                           \
+    }                                                                                                                                                    \
+    dContactGeom *currContact = CONTACT(contact, nContactsFound * skip);                                                                                 \
+    currContact->pos[0] = p[0] op3 orderedSignedHalfSideVectors[2][0] op2 orderedSignedHalfSideVectors[1][0] op1 orderedSignedHalfSideVectors[0][0];     \
+    currContact->pos[1] = p[1] op3 orderedSignedHalfSideVectors[2][1] op2 orderedSignedHalfSideVectors[1][1] op1 orderedSignedHalfSideVectors[0][1];     \
+    currContact->pos[2] = p[2] op3 orderedSignedHalfSideVectors[2][2] op2 orderedSignedHalfSideVectors[1][2] op1 orderedSignedHalfSideVectors[0][2];     \
+    currContact->depth = contactDepth;                                                                                                                   \
+    if (++nContactsFound == maxc)                                                                                                                        \
+    {                                                                                                                                                    \
+        break;                                                                                                                                           \
+    }                                                                                                                                                    \
+} // END OF MACRO DEFINITION
+
+        // But first we need to sort the sides and Bs. We'll start with them in their original order...
+        const dReal *orderedSignedHalfSideVectors[3] = {
+            &(signedHalfSideVectors[0][0]),
+            &(signedHalfSideVectors[1][0]),
+            &(signedHalfSideVectors[2][0]),
+        };
+        const dReal *orderedB = B;
+
+        // Swap the one that corresponds to the lowest B into the 0th position.
+        if (B[1] < B[0])
+        {
+            dxSwap(B[1], B[0]);
+            dxSwap(orderedSignedHalfSideVectors[1], orderedSignedHalfSideVectors[0]);
+        }
+
+        if (B[2] < B[0])
+        {
+            dxSwap(B[2], B[0]);
+            dxSwap(orderedSignedHalfSideVectors[2], orderedSignedHalfSideVectors[0]);
+        }
+
+        // For the second deepest vertex, we don't actually care about the order of other 2 sides, so we
+        // can go ahead and process that one. Maybe we'll get lucky and exit early.
+        ADD_VERTEX_IF_INSIDE(+, -, -);
+
+        // If we didn't get lucky, we need to sort the remaining 2 sides.
+        if (B[2] < B[1])
+        {
+            dxSwap(B[2], B[1]);
+            dxSwap(orderedSignedHalfSideVectors[2], orderedSignedHalfSideVectors[1]);
+        }
+
+        // Now we can process the third deepest vertex.
+        ADD_VERTEX_IF_INSIDE(-, +, -);
+
+        // Determine which of the 2 middle vertices is deeper and process them in the correct order.
+        if (B[0] + B[1] < B[2])
+        {
+            ADD_VERTEX_IF_INSIDE(+, +, -);
+            ADD_VERTEX_IF_INSIDE(-, -, +);
+        }
+        else
+        {
+            ADD_VERTEX_IF_INSIDE(-, -, +);
+            ADD_VERTEX_IF_INSIDE(+, +, -);
+        }
+
+        // Process the 3 remaining vertices in order.
+        ADD_VERTEX_IF_INSIDE(+, -, +);
+        ADD_VERTEX_IF_INSIDE(-, +, +);
+        ADD_VERTEX_IF_INSIDE(+, +, +);
+    }
+    while (false);
+
+    if (nContactsFound != 0)
+    {
+        finishBoxPlaneContacts(nContactsFound, contact, skip, box, plane, normal);
+    }
+
+    int retVal = nContactsFound;
+    return retVal;
+}
+
+// Fill in the the non-varying contact info for the first n contacts.
+static 
+void finishBoxPlaneContacts(unsigned contactCount, dContactGeom *&contact, int skip, dxGeom *o1, dxGeom *o2, const dReal *normal)
+{
+    for (unsigned contactIndex = 0; contactIndex != contactCount; ++contactIndex)
+    {
+        dContactGeom *currContact = CONTACT(contact, contactIndex * skip);
+        currContact->g1 = o1;
+        currContact->g2 = o2;
+        currContact->side1 = -1;
+        currContact->side2 = -1;
+
+        currContact->normal[0] = normal[0];
+        currContact->normal[1] = normal[1];
+        currContact->normal[2] = normal[2];
+    }
+}
+

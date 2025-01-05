@@ -45,6 +45,8 @@ int dCollideSpherePlane (dxGeom *o1, dxGeom *o2, int flags,
                          dContactGeom *contact, int skip);
 int dCollideBoxBox (dxGeom *o1, dxGeom *o2, int flags,
                     dContactGeom *contact, int skip);
+int dCollideBoxPlaneOld(dxGeom *o1, dxGeom *o2,
+                        int flags, dContactGeom *contact, int skip);
 int dCollideBoxPlane (dxGeom *o1, dxGeom *o2,
                       int flags, dContactGeom *contact, int skip);
 int dCollideCapsuleSphere (dxGeom *o1, dxGeom *o2, int flags,
