@@ -30,8 +30,8 @@
 //****************************************************************************
 // matrix sizes
 
-#define dALIGN_SIZE(buf_size, alignment) (((buf_size) + (alignment - 1)) & (int)(~(alignment - 1))) // Casting the mask to int ensures sign-extension to larger integer sizes
-#define dALIGN_PTR(buf_ptr, alignment) ((void *)(((duintptr)(buf_ptr) + ((alignment) - 1)) & (int)(~(alignment - 1)))) // Casting the mask to int ensures sign-extension to larger integer sizes
+#define dALIGN_SIZE(buf_size, alignment) (((buf_size) + ((alignment) - 1)) & (int)(~((alignment) - 1))) // Casting the mask to int ensures sign-extension to larger integer sizes
+#define dALIGN_PTR(buf_ptr, alignment) ((void *)(((duintptr)(buf_ptr) + ((alignment) - 1)) & (int)(~((alignment) - 1)))) // Casting the mask to int ensures sign-extension to larger integer sizes
 
 #define MSIZE 21
 #define MSIZE4 dALIGN_SIZE(MSIZE, 4)	// MSIZE rounded up to 4
@@ -481,7 +481,7 @@ void testFastLDLTFactorization()
 
 void testCoopLDLTFactorization()
 {
-    int i,j;
+    unsigned i,j;
 
     const dsizeint COOP_MSIZE = MSIZE * 51, COOP_MSIZE4 = dALIGN_SIZE(COOP_MSIZE, 4);
 
@@ -501,7 +501,7 @@ void testCoopLDLTFactorization()
 
     HEADER;
 
-    for (int pass = 0; pass != 4; ++pass)
+    for (unsigned pass = 0; pass != 4; ++pass)
     {
         dTimerStart ("Factoring LDLT");
 
@@ -1237,7 +1237,6 @@ void dMatrixComparison::dump()
 //****************************************************************************
 // unit test
 
-#include <setjmp.h>
 
 // static jmp_buf jump_buffer;
 
