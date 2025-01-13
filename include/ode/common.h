@@ -559,6 +559,7 @@ dGeomID dGeomGetBodyNext (dGeomID);
  * ODE_EXT_mt_collisions
  * ODE_EXT_threading
  * ODE_THR_builtin_impl
+ * ODE_EXT_inelastic_collisions
  */
 ODE_API const char* dGetConfiguration (void);
 

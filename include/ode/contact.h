@@ -43,6 +43,7 @@ enum {
   dContactSlip1	  = 0x100,      /**< Force-dependent slip. */
   dContactSlip2	  = 0x200, 
   dContactRolling = 0x400,      /**< Rolling/Angular friction */
+  dContactInelastic = 0x800,    /**< Allow inward contact force for inelastic collision */
 
   dContactApprox0   = 0x0000,
   dContactApprox1_1 = 0x1000,
@@ -68,6 +69,7 @@ typedef struct dSurfaceParameters {
   dReal soft_cfm;
   dReal motion1,motion2,motionN;
   dReal slip1,slip2;
+  dReal inward_force_limit;     /**< Inward force limit (zero or a negative number up to -dInfinity) */
 } dSurfaceParameters;
 
 

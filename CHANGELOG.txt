@@ -8,6 +8,10 @@ the rules for this file:
   * keep the format consistent (79 char width, M/D/Y date format).
 
 ------------------------------------------------------------------------------
+01/14/2025 Oleh Derevenko
+        * Support for inelastic collitions was added (see dContactInelastic bit of 
+          dSurfaceParameters::mode and related inward_force_limit field).
+
 01/05/2025 Dean Brettle
         * A new box-plane collider function was implemented to  improve speed, 
           accuracy, and readability. The new code is significantly faster at 

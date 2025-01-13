@@ -209,7 +209,7 @@ dxJointContact::getInfo2(dReal worldFPS, dReal worldERP,
     }
 
     // set LCP limits for normal
-    pairLoHi[ROW_NORMAL * pairskip + GI2_LO] = 0;
+    pairLoHi[ROW_NORMAL * pairskip + GI2_LO] = (surface_mode & dContactInelastic) == 0 ? REAL(0.0) : dMin(contact.surface.inward_force_limit, REAL(0.0));
     pairLoHi[ROW_NORMAL * pairskip + GI2_HI] = dInfinity;
 
 

@@ -2421,6 +2421,8 @@ REGISTER_EXTENSION( ODE_THR_builtin_impl )
 
 #endif // #if !dTHREADING_INTF_DISABLED
 
+REGISTER_EXTENSION(ODE_EXT_inelastic_collisions)
+
 //**********************************
 // EXTENSION LIST END
 
