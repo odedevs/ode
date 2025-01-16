@@ -42,6 +42,7 @@ option(ODE_WITH_OPCODE "Use old OPCODE trimesh-trimesh collider." ON)
 option(ODE_WITH_OU "Use TLS for global caches (allows threaded collision checks for separated spaces)." OFF)
 option(ODE_WITH_TESTS "Builds the unit test application." ON)
 option(ODE_WIN32_LIB_OUTPUT_NAME_BASED_ON_FLOAT_SIZE "The output name of the library will be based on the size of float, on Windows." ON)
+option(ODE_WIN32_INSTALL_STATIC_LIBS_PDB "Install the PDB files for the static libraries (.lib) on Windows." OFF)
 
 cmake_dependent_option(ODE_WITH_LIBCCD_BOX_CYL "Use libccd for box-cylinder." ON "ODE_WITH_LIBCCD" OFF)
 cmake_dependent_option(ODE_WITH_LIBCCD_CAP_CYL "Use libccd for capsule-cylinder." ON "ODE_WITH_LIBCCD" OFF)
@@ -528,6 +529,10 @@ if(WIN32)
 	else()
 		if(ODE_WIN32_STATIC_LIB_POSTFIX_DEBUG)
 			set_target_properties(ODE PROPERTIES DEBUG_POSTFIX ${ODE_WIN32_STATIC_LIB_POSTFIX_DEBUG})
+			if(ODE_WIN32_INSTALL_STATIC_LIBS_PDB)
+				get_target_property(output_name_ ODE OUTPUT_NAME)
+				set_target_properties(ODE PROPERTIES COMPILE_PDB_NAME_DEBUG ${output_name_}${ODE_WIN32_STATIC_LIB_POSTFIX_DEBUG})
+			endif()
 		endif()
 		if(ODE_WIN32_STATIC_LIB_POSTFIX_MINSIZEREL)
 			set_target_properties(ODE PROPERTIES MINSIZEREL_POSTFIX ${ODE_WIN32_STATIC_LIB_POSTFIX_MINSIZEREL} )
@@ -537,6 +542,10 @@ if(WIN32)
 		endif()
 		if(ODE_WIN32_STATIC_LIB_POSTFIX_RELWITHDEBINFO)
 			set_target_properties(ODE PROPERTIES RELWITHDEBINFO_POSTFIX ${ODE_WIN32_STATIC_LIB_POSTFIX_RELWITHDEBINFO})
+			if(ODE_WIN32_INSTALL_STATIC_LIBS_PDB)
+				get_target_property(output_name_ ODE OUTPUT_NAME)
+				set_target_properties(ODE PROPERTIES COMPILE_PDB_NAME_RELWITHDEBINFO ${output_name_}${ODE_WIN32_STATIC_LIB_POSTFIX_RELWITHDEBINFO})
+			endif()
 		endif()
 	endif()
 	
@@ -723,6 +732,25 @@ endif()
 
 if(MSVC AND BUILD_SHARED_LIBS AND NOT CMAKE_VERSION VERSION_LESS 3.1)
 	install(FILES $<TARGET_PDB_FILE:ODE> DESTINATION ${CMAKE_INSTALL_BINDIR} CONFIGURATIONS Debug RelWithDebInfo COMPONENT debug)
+endif()
+
+if(MSVC
+	AND NOT BUILD_SHARED_LIBS
+	AND NOT CMAKE_VERSION VERSION_LESS 3.1
+	AND ODE_WIN32_INSTALL_STATIC_LIBS_PDB)
+
+	get_target_property(compile_pdb_name_ ODE COMPILE_PDB_NAME_DEBUG)
+	install(
+		FILES $<TARGET_FILE_DIR:ODE>/${compile_pdb_name_}.pdb
+		DESTINATION ${CMAKE_INSTALL_LIBDIR}
+		CONFIGURATIONS Debug
+		COMPONENT debug)
+	get_target_property(compile_pdb_name_ ODE COMPILE_PDB_NAME_RELWITHDEBINFO)
+	install(
+		FILES $<TARGET_FILE_DIR:ODE>/${compile_pdb_name_}.pdb
+		DESTINATION ${CMAKE_INSTALL_LIBDIR}
+		CONFIGURATIONS RelWithDebInfo
+		COMPONENT debug)
 endif()
 
 install(FILES ${HDRS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/ode COMPONENT development)
