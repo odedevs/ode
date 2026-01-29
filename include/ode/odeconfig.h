@@ -101,8 +101,10 @@
     typedef ptrdiff_t       ddiffint;
     typedef size_t          dsizeint;
 
-#elif (defined(_M_IA64) || defined(__ia64__) || defined(_M_AMD64) || defined(__x86_64__)) && !defined(__ILP32__) && !defined(_ILP32)
+#elif (defined(_M_IA64) || defined(__ia64__) || defined(_M_AMD64) || defined(__x86_64__) || defined(_M_ARM64)) && !defined(__ILP32__) && !defined(_ILP32)
+#if (defined(_M_IA64) || defined(__ia64__) || defined(_M_AMD64) || defined(__x86_64__))
   #define X86_64_SYSTEM   1
+#endif
 #if defined(_MSC_VER)
   typedef __int64         dint64;
   typedef unsigned __int64 duint64;
@@ -204,7 +206,7 @@ typedef unsigned long     duint64;
   #define _ode_copysign(x, y) _copysign(x, y)
   #define _ode_nextafterf(x, y) _nextafterf(x, y)
   #define _ode_nextafter(x, y) _nextafter(x, y)
-  #if !defined(_WIN64) && defined(dSINGLE)
+  #if (!defined(_WIN64) || defined(_M_ARM64)) && defined(dSINGLE)
     #define _ODE__NEXTAFTERF_REQUIRED
     ODE_EXTERN_C float _nextafterf(float x, float y);
   #endif
