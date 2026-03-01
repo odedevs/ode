@@ -65,6 +65,8 @@
 #define ODE_PLATFORM_PSP
 #elif defined(SN_TARGET_PS3)
 #define ODE_PLATFORM_PS3
+#elif defined(__EMSCRIPTEN__)
+#define ODE_PLATFORM_EMSCRIPTEN
 #elif defined(_MSC_VER) || defined(__CYGWIN__) || defined(__MINGW32__)
 #define ODE_PLATFORM_WINDOWS
 #elif defined(__linux__)
