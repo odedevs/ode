@@ -95,6 +95,40 @@ double dTimerTicksPerSecond()
 // instructions have executed and data has been written back before the cpu
 // time stamp counter is read. the CPUID instruction is used to serialize.
 
+// Implementation based on Emscripten emscripten_get_now()
+#elif defined(ODE_PLATFORM_EMSCRIPTEN)
+
+#include <emscripten.h>
+#include <cstring>
+
+static inline void getClockCount(unsigned long cc[2])
+{
+    double now = emscripten_get_now();
+    std::memcpy(cc, &now, sizeof(double));
+}
+
+static inline void serialize()
+{
+}
+
+static inline double loadClockCount(unsigned long cc[2])
+{
+    double resultTime;
+    std::memcpy(&resultTime, cc, sizeof(double));
+    return resultTime;
+}
+
+double dTimerResolution()
+{
+    return 1e-3;
+}
+
+double dTimerTicksPerSecond()
+{
+    return 1e3;
+}
+
+
 #elif defined(PENTIUM)
 
 // we need to know the clock rate so that the timing function can report
