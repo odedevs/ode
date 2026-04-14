@@ -1,0 +1,55 @@
+name: 🚧🪟 Build on Windows (MSYS2)
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { icon: '🟦', sys: mingw64 }
+          - { icon: '🟨', sys: ucrt64 }
+          - { icon: '🟧', sys: clang64 }
+    name: 🚧${{ matrix.icon }} ${{ matrix.sys }}
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+    - name: '🧰 Checkout'
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+
+    - name: '${{ matrix.icon }} Setup MSYS2'
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: ${{matrix.sys}}
+        update: true
+        install: >-
+          git
+          make
+        pacboy: >-
+          toolchain:p
+          cmake:p
+          make:p
+
+    - name: '⚙️ Configure CMake'
+      run: cmake -G "MSYS Makefiles" -B build -DCMAKE_BUILD_TYPE=Release -DODE_WITH_DEMOS=OFF
+
+    - name: '🔨 Build'
+      run: cmake --build build --parallel "$(nproc)"
+
+    - name: '🧪 Run Tests'
+      run: |
+        cd build
+        ctest --output-on-failure

@@ -1,9 +1,16 @@
 The Open Dynamics Engine (ODE)
 ==============================
 
+[![Windows Build](https://github.com/odedevs/ode/actions/workflows/build-windows.yml/badge.svg)](https://github.com/odedevs/ode/actions/workflows/build-windows.yml)
+[![MSYS2 Build](https://github.com/odedevs/ode/actions/workflows/build-msys2.yml/badge.svg)](https://github.com/odedevs/ode/actions/workflows/build-msys2.yml)
+[![Ubuntu Build](https://github.com/odedevs/ode/actions/workflows/build-ubuntu.yml/badge.svg)](https://github.com/odedevs/ode/actions/workflows/build-ubuntu.yml)
+[![Arch Linux Build](https://github.com/odedevs/ode/actions/workflows/build-archlinux.yml/badge.svg)](https://github.com/odedevs/ode/actions/workflows/build-archlinux.yml)
+[![macOS Build](https://github.com/odedevs/ode/actions/workflows/build-macos.yml/badge.svg)](https://github.com/odedevs/ode/actions/workflows/build-macos.yml)
+
 ![ODE logo](https://bitbucket.org/odedevs/ode/raw/master/web/ODElogo.png)
 
 Copyright (C) 2001-2007 Russell L. Smith.
+Copyright (C) 2008-2026 Open Dynamics Engine contributors.
 
 
 ODE is a free, industrial quality library for simulating articulated

@@ -1,0 +1,39 @@
+name: 🚧🐧 Build on Arch Linux
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
+  pull_request:
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+
+    steps:
+    - name: '🧰 Checkout'
+      uses: actions/checkout@v6
+
+    - name: '🐧 Build in Arch Linux container'
+      run: |
+        docker run --rm -v ${{github.workspace}}:/workspace -w /workspace archlinux:latest bash -c "
+          pacman -Syu --noconfirm &&
+          pacman -S --noconfirm base-devel gcc clang cmake make mesa glu freeglut &&
+          if [ '${{ matrix.compiler }}' = 'gcc' ]; then
+            cmake -B /workspace/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DODE_WITH_DEMOS=OFF
+          else
+            cmake -B /workspace/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DODE_WITH_DEMOS=OFF
+          fi &&
+          cmake --build /workspace/build --parallel \"\$(nproc)\" &&
+          cd /workspace/build &&
+          ctest --output-on-failure
+        "

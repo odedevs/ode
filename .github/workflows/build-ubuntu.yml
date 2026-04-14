@@ -1,0 +1,56 @@
+name: 🚧🐧 Build on Ubuntu
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
+  pull_request:
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+
+    steps:
+    - name: '🧰 Checkout'
+      uses: actions/checkout@v6
+
+    - name: '📦 Install dependencies'
+      run: >-
+        sudo apt-get update ;
+        sudo apt-get install -y
+        build-essential
+        cmake
+        gcc
+        g++
+        clang
+        libglu1-mesa-dev
+        freeglut3-dev
+        mesa-common-dev
+
+    - name: '⚙️ Configure CMake (GCC)'
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DODE_WITH_DEMOS=OFF
+      if: matrix.compiler == 'gcc'
+
+    - name: '⚙️ Configure CMake (Clang)'
+      run: >-
+        cmake -B ${{github.workspace}}/build
+        -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+        -DCMAKE_C_COMPILER=clang
+        -DCMAKE_CXX_COMPILER=clang++
+        -DODE_WITH_DEMOS=OFF
+      if: matrix.compiler == 'clang'
+
+    - name: '🔨 Build'
+      run: cmake --build ${{github.workspace}}/build --parallel "$(nproc)"
+
+    - name: '🧪 Run Tests'
+      run: ctest --test-dir ${{github.workspace}}/build --output-on-failure
