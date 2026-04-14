@@ -47,15 +47,23 @@ test-driver
 !/ode/demo/demo_*.c*
 /ode/doc/html/
 
-# ignore folders created by premake
-/build/codeblocks
-/build/codelite
-/build/gmake
-/build/vs2002
-/build/vs2003
-/build/vs2005
-/build/vs2008
-/build/vs2010
+# ignore posible build folders
+/build/*
+msvc*
+mingw64
+mingw32
+make*
+build*
+codeblocks*
+clang64
+ucrt64
+gcc*
+vcpkg_installed
+Xcode
+xcode
+
+#ignore IDE folders
+.vscode
 
 # ignore folder created during compilation
 /lib/
