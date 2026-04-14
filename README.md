@@ -19,13 +19,25 @@ and moving objects in VR environments. It is fast, flexible, robust
 and platform independent, with advanced joints, contact with friction,
 and built-in collision detection.
 
-This library is free software; you can redistribute it and/or
-modify it under the terms of EITHER:
+License
+-------
 
-- The GNU Lesser General Public License version 2.1 or any later.
-- The BSD-style License.
+ODE is dual-licensed under either:
 
-See the [COPYING](https://raw.githubusercontent.com/odedevs/ode/master/COPYING) file for more details.
+- [GNU Lesser General Public License v2.1](LICENSE.TXT) or later.
+- [Modified 3-clause BSD License](LICENSE).
+
+Third-party libraries bundled with ODE:
+
+- **GIMPACT** — dual-licensed under either:
+  - [GNU Lesser General Public License v2.1](GIMPACT/GIMPACT-LICENSE-LGPL.TXT) or later.
+  - [Modified 3-clause BSD License](GIMPACT/GIMPACT-LICENSE-BSD.TXT).
+- **libccd** — [Modified 3-clause BSD License](libccd/BSD-LICENSE).
+- **OU/ODER** — triple-licensed under either:
+  - [GNU Lesser General Public License v3](ou/LICENSE-LESSER.TXT) or later.
+  - [Modified 3-clause BSD License](ou/LICENSE-BSD.TXT).
+  - [ZLIB License](ou/LICENSE-ZLIB.TXT).
+- **OPCODE** — under the same terms as ODE. See [OPCODE/COPYING](OPCODE/COPYING).
 
 Links
 -----
