@@ -1,0 +1,6 @@
+# Commits to ignore in git blame (bulk formatting, style-only changes).
+# Configure locally with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Add commit SHAs below after bulk clang-format runs, e.g.:
+# aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  # apply clang-format to entire codebase

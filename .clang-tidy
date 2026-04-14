@@ -1,0 +1,86 @@
+---
+# ODE Coding Style Requirements (CSR) - clang-tidy configuration
+#
+# Reference: CSR.txt
+#
+# CSR Rule Mapping:
+#
+# ENFORCEABLE:
+#   (I.2) No goto               -> cppcoreguidelines-avoid-goto, hicpp-avoid-goto
+#   (I.1) One complex construct -> readability-function-cognitive-complexity (limit)
+#   (I.5) Init with zero        -> cppcoreguidelines-init-variables
+#   (I.6) No variable reuse     -> misc-const-correctness (partial)
+#   (I.7) Params by value const -> readability-non-const-parameter (partial)
+#   (II.3) Private fields only  -> misc-non-private-member-variables-in-classes
+#
+# PARTIALLY ENFORCEABLE (heuristic):
+#   (I.3) Single exit point     -> No direct check; readability-function-cognitive-complexity
+#                                  helps keep functions simple enough for single return
+#   (I.1) Function complexity   -> readability-function-size (lines/statements/branches)
+#
+# NOT ENFORCEABLE BY CLANG-TIDY (require code review):
+#   (I.2) No continue
+#   (I.4) Zero value means failure
+#   (I.8) Result assignment at end
+#   (I.9) Reference params copied to locals
+#   (II.1) Classes work with own fields
+#   (II.2) No direct field access (use accessors)
+#   (II.4) No code in constructors
+#   (II.5) No code in callbacks
+#   (II.6) No public virtual methods
+#   (II.7) No logical level violations
+#
+
+Checks: >
+  -*,
+  cppcoreguidelines-avoid-goto,
+  hicpp-avoid-goto,
+  cppcoreguidelines-init-variables,
+  misc-const-correctness,
+  misc-non-private-member-variables-in-classes,
+  readability-function-cognitive-complexity,
+  readability-function-size,
+  readability-non-const-parameter,
+  bugprone-branch-clone,
+  bugprone-macro-parentheses,
+  bugprone-sizeof-expression,
+  bugprone-suspicious-string-compare,
+  bugprone-use-after-move,
+
+WarningsAsErrors: >
+  cppcoreguidelines-avoid-goto,
+  hicpp-avoid-goto,
+
+CheckOptions:
+  # (I.1) One complex construction per function - keep functions small
+  - key: readability-function-cognitive-complexity.Threshold
+    value: 25
+  - key: readability-function-size.LineThreshold
+    value: 200
+  - key: readability-function-size.StatementThreshold
+    value: 100
+  - key: readability-function-size.BranchThreshold
+    value: 20
+  - key: readability-function-size.ParameterThreshold
+    value: 8
+  - key: readability-function-size.NestingThreshold
+    value: 5
+
+  # (I.5) Variables initialized with zero
+  - key: cppcoreguidelines-init-variables.IncludeStyle
+    value: llvm
+
+  # (II.3) Private fields only - flag protected/public member variables
+  - key: misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
+    value: true
+
+  # (I.6/I.7) Encourage const-correctness
+  - key: misc-const-correctness.AnalyzeValues
+    value: true
+  - key: misc-const-correctness.AnalyzeReferences
+    value: true
+  - key: misc-const-correctness.WarnPointersAsValues
+    value: false
+
+HeaderFilterRegex: '(include/ode|include/drawstuff|ode/src|drawstuff/src)/.*\.h$'
+...

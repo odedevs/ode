@@ -1,12 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
-
-if(POLICY CMP0072)
-	cmake_policy(SET CMP0072 NEW)
-endif()
-
-if(POLICY CMP0075)
-	cmake_policy(SET CMP0075 NEW)
-endif()
+cmake_minimum_required(VERSION 3.10...3.31)
 
 project(ODE)
 
@@ -1008,6 +1000,44 @@ install(
 
 configure_file(cmake/cmake_uninstall.cmake.in cmake_uninstall.cmake @ONLY)
 add_custom_target(uninstall ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
+
+# clang-format and clang-tidy targets (operate on git-modified files only)
+find_program(CLANG_FORMAT clang-format)
+find_program(CLANG_TIDY clang-tidy)
+
+if(CLANG_FORMAT)
+	add_custom_target(format
+		COMMAND ${CMAKE_COMMAND}
+			-DTOOL=${CLANG_FORMAT}
+			-DMODE=format
+			-DSOURCE_DIR=${PROJECT_SOURCE_DIR}
+			-P ${PROJECT_SOURCE_DIR}/cmake/run-clang-tool.cmake
+		COMMENT "Running clang-format on git-modified source files"
+		VERBATIM
+	)
+	add_custom_target(format-check
+		COMMAND ${CMAKE_COMMAND}
+			-DTOOL=${CLANG_FORMAT}
+			-DMODE=format-check
+			-DSOURCE_DIR=${PROJECT_SOURCE_DIR}
+			-P ${PROJECT_SOURCE_DIR}/cmake/run-clang-tool.cmake
+		COMMENT "Checking clang-format compliance on git-modified source files"
+		VERBATIM
+	)
+endif()
+
+if(CLANG_TIDY)
+	add_custom_target(tidy
+		COMMAND ${CMAKE_COMMAND}
+			-DTOOL=${CLANG_TIDY}
+			-DMODE=tidy
+			-DSOURCE_DIR=${PROJECT_SOURCE_DIR}
+			-DBUILD_DIR=${CMAKE_BINARY_DIR}
+			-P ${PROJECT_SOURCE_DIR}/cmake/run-clang-tool.cmake
+		COMMENT "Running clang-tidy on git-modified source files"
+		VERBATIM
+	)
+endif()
 
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "ODE is a free, industrial quality library for simulating articulated rigid body dynamics - for example ground vehicles, legged creatures, and moving objects in VR environments. It is fast, flexible, robust and platform independent, with advanced joints, contact with friction, and built-in collision detection.")
 
