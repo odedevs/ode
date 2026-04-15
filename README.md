@@ -7,9 +7,10 @@ The Open Dynamics Engine (ODE)
 [![Arch Linux Build](https://github.com/odedevs/ode/actions/workflows/build-archlinux.yml/badge.svg)](https://github.com/odedevs/ode/actions/workflows/build-archlinux.yml)
 [![macOS Build](https://github.com/odedevs/ode/actions/workflows/build-macos.yml/badge.svg)](https://github.com/odedevs/ode/actions/workflows/build-macos.yml)
 
-![ODE logo](https://raw.githubusercontent.com/odedevs/ode/master/web/ODElogo.png)
+[![ODE logo](https://raw.githubusercontent.com/odedevs/ode/master/web/odelogo.svg)](https://www.ode.org/)
 
 Copyright (C) 2001-2007 Russell L. Smith.
+
 Copyright (C) 2008-2026 Open Dynamics Engine contributors.
 
 
