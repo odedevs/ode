@@ -1251,7 +1251,7 @@ static void myDebug (int /*num*/, const char* /*msg*/, va_list /*ap*/)
 
 extern "C" void dTestMatrixComparison()
 {
-    volatile int i;
+    int i;
     printf ("dTestMatrixComparison()\n");
     dMessageFunction *orig_debug = dGetDebugHandler();
 
@@ -1289,7 +1289,7 @@ extern "C" void dTestMatrixComparison()
     volatile int passcount = 0;
     for (i=1; i<49; i++) {
         if (setjmp (jump_buffer)) {
-            passcount++;
+            passcount = passcount + 1;
         }
         else {
             dSetDebugHandler (&myDebug);
@@ -1307,7 +1307,7 @@ extern "C" void dTestMatrixComparison()
     passcount = 0;
     for (i=1; i<49; i++) {
         if (setjmp (jump_buffer)) {
-            passcount++;
+            passcount = passcount + 1;
         }
         else {
             dSetDebugHandler (&myDebug);

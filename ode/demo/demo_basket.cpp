@@ -159,8 +159,8 @@ static void simLoop (int pause)
   dsSetColor (1,1,1);
   const dReal *SPos = dBodyGetPosition(sphbody);
   const dReal *SRot = dBodyGetRotation(sphbody);
-  float spos[3] = {SPos[0], SPos[1], SPos[2]};
-  float srot[12] = { SRot[0], SRot[1], SRot[2], SRot[3], SRot[4], SRot[5], SRot[6], SRot[7], SRot[8], SRot[9], SRot[10], SRot[11] };
+  float spos[3] = {static_cast<float>(SPos[0]), static_cast<float>(SPos[1]), static_cast<float>(SPos[2])};
+  float srot[12] = { static_cast<float>(SRot[0]), static_cast<float>(SRot[1]), static_cast<float>(SRot[2]), static_cast<float>(SRot[3]), static_cast<float>(SRot[4]), static_cast<float>(SRot[5]), static_cast<float>(SRot[6]), static_cast<float>(SRot[7]), static_cast<float>(SRot[8]), static_cast<float>(SRot[9]), static_cast<float>(SRot[10]), static_cast<float>(SRot[11]) };
   dsDrawSphere
   (
     spos, 
@@ -174,11 +174,11 @@ static void simLoop (int pause)
 
   const dReal* Pos = dGeomGetPosition(world_mesh);
   //dIASSERT(dVALIDVEC3(Pos));
-  float pos[3] = { Pos[0], Pos[1], Pos[2] };
+  float pos[3] = { static_cast<float>(Pos[0]), static_cast<float>(Pos[1]), static_cast<float>(Pos[2]) };
 
   const dReal* Rot = dGeomGetRotation(world_mesh);
   //dIASSERT(dVALIDMAT3(Rot));
-  float rot[12] = { Rot[0], Rot[1], Rot[2], Rot[3], Rot[4], Rot[5], Rot[6], Rot[7], Rot[8], Rot[9], Rot[10], Rot[11] };
+  float rot[12] = { static_cast<float>(Rot[0]), static_cast<float>(Rot[1]), static_cast<float>(Rot[2]), static_cast<float>(Rot[3]), static_cast<float>(Rot[4]), static_cast<float>(Rot[5]), static_cast<float>(Rot[6]), static_cast<float>(Rot[7]), static_cast<float>(Rot[8]), static_cast<float>(Rot[9]), static_cast<float>(Rot[10]), static_cast<float>(Rot[11]) };
 
   int numi = sizeof(world_indices)  / sizeof(dTriIndex);
 

@@ -171,8 +171,8 @@ static void simLoop (int pause)
 #ifdef BOX
   const dReal *BPos = dBodyGetPosition(boxbody);
   const dReal *BRot = dBodyGetRotation(boxbody);
-  float bpos[3] = {BPos[0], BPos[1], BPos[2]};
-  float brot[12] = { BRot[0], BRot[1], BRot[2], BRot[3], BRot[4], BRot[5], BRot[6], BRot[7], BRot[8], BRot[9], BRot[10], BRot[11] };
+  float bpos[3] = {static_cast<float>(BPos[0]), static_cast<float>(BPos[1]), static_cast<float>(BPos[2])};
+  float brot[12] = { static_cast<float>(BRot[0]), static_cast<float>(BRot[1]), static_cast<float>(BRot[2]), static_cast<float>(BRot[3]), static_cast<float>(BRot[4]), static_cast<float>(BRot[5]), static_cast<float>(BRot[6]), static_cast<float>(BRot[7]), static_cast<float>(BRot[8]), static_cast<float>(BRot[9]), static_cast<float>(BRot[10]), static_cast<float>(BRot[11]) };
   float sides[3] = {BOXSZ, BOXSZ, BOXSZ};
   dsDrawBox
   (
@@ -184,8 +184,8 @@ static void simLoop (int pause)
 #ifdef CYL
   const dReal *CPos = dGeomGetPosition(cylgeom);
   const dReal *CRot = dGeomGetRotation(cylgeom);
-  float cpos[3] = {CPos[0], CPos[1], CPos[2]};
-  float crot[12] = { CRot[0], CRot[1], CRot[2], CRot[3], CRot[4], CRot[5], CRot[6], CRot[7], CRot[8], CRot[9], CRot[10], CRot[11] };
+  float cpos[3] = {static_cast<float>(CPos[0]), static_cast<float>(CPos[1]), static_cast<float>(CPos[2])};
+  float crot[12] = { static_cast<float>(CRot[0]), static_cast<float>(CRot[1]), static_cast<float>(CRot[2]), static_cast<float>(CRot[3]), static_cast<float>(CRot[4]), static_cast<float>(CRot[5]), static_cast<float>(CRot[6]), static_cast<float>(CRot[7]), static_cast<float>(CRot[8]), static_cast<float>(CRot[9]), static_cast<float>(CRot[10]), static_cast<float>(CRot[11]) };
   dsDrawCylinder
   ( 
 //    dBodyGetPosition(cylbody),
@@ -202,10 +202,10 @@ static void simLoop (int pause)
   dsSetTexture (DS_NONE);
 
   const dReal* Pos = dGeomGetPosition(world_mesh);
-  float pos[3] = { Pos[0], Pos[1], Pos[2] };
+  float pos[3] = { static_cast<float>(Pos[0]), static_cast<float>(Pos[1]), static_cast<float>(Pos[2]) };
 
   const dReal* Rot = dGeomGetRotation(world_mesh);
-  float rot[12] = { Rot[0], Rot[1], Rot[2], Rot[3], Rot[4], Rot[5], Rot[6], Rot[7], Rot[8], Rot[9], Rot[10], Rot[11] };
+  float rot[12] = { static_cast<float>(Rot[0]), static_cast<float>(Rot[1]), static_cast<float>(Rot[2]), static_cast<float>(Rot[3]), static_cast<float>(Rot[4]), static_cast<float>(Rot[5]), static_cast<float>(Rot[6]), static_cast<float>(Rot[7]), static_cast<float>(Rot[8]), static_cast<float>(Rot[9]), static_cast<float>(Rot[10]), static_cast<float>(Rot[11]) };
 
   int numi = sizeof(world_indices)  / sizeof(dTriIndex);
 

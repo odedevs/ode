@@ -137,7 +137,7 @@ enum dxJInvMElement
 {
     JIM__MIN,
 
-    JIM__L_MIN = JIM__MIN + dMD_LINEAR * dV3E__MAX,
+    JIM__L_MIN = JIM__MIN + static_cast<int>(dMD_LINEAR) * static_cast<int>(dV3E__MAX),
 
     JIM__L_AXES_MIN = JIM__L_MIN + dV3E__AXES_MIN,
 
@@ -151,7 +151,7 @@ enum dxJInvMElement
 
     JIM__L_MAX = JIM__L_MIN + dV3E__MAX,
 
-    JIM__A_MIN = JIM__MIN + dMD_ANGULAR * dV3E__MAX,
+    JIM__A_MIN = JIM__MIN + static_cast<int>(dMD_ANGULAR) * static_cast<int>(dV3E__MAX),
 
     JIM__A_AXES_MIN = JIM__A_MIN + dV3E__AXES_MIN,
 
@@ -165,7 +165,7 @@ enum dxJInvMElement
 
     JIM__A_MAX = JIM__A_MIN + dV3E__MAX,
 
-    JIM__MAX = JIM__MIN + dMD__MAX * dV3E__MAX,
+    JIM__MAX = JIM__MIN + static_cast<int>(dMD__MAX) * static_cast<int>(dV3E__MAX),
 };
 
 enum dxContactForceElement

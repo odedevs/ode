@@ -2,11 +2,14 @@ cmake_minimum_required(VERSION 3.10...3.31)
 
 project(ODE)
 
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+
 include(CheckFunctionExists)
 include(CheckIncludeFiles)
 include(CMakeDependentOption)
 include(CMakePushCheckState)
 include(GNUInstallDirs)
+include(compiler_settings)
 
 set(SOVERSION_MAJOR 8)
 set(SOVERSION_MINOR 0)

@@ -151,8 +151,8 @@ static void simLoop (int pause)
 
   const dReal *CPos = dBodyGetPosition(cylbody);
   const dReal *CRot = dBodyGetRotation(cylbody);
-  float cpos[3] = {CPos[0], CPos[1], CPos[2]};
-  float crot[12] = { CRot[0], CRot[1], CRot[2], CRot[3], CRot[4], CRot[5], CRot[6], CRot[7], CRot[8], CRot[9], CRot[10], CRot[11] };
+  float cpos[3] = {static_cast<float>(CPos[0]), static_cast<float>(CPos[1]), static_cast<float>(CPos[2])};
+  float crot[12] = { static_cast<float>(CRot[0]), static_cast<float>(CRot[1]), static_cast<float>(CRot[2]), static_cast<float>(CRot[3]), static_cast<float>(CRot[4]), static_cast<float>(CRot[5]), static_cast<float>(CRot[6]), static_cast<float>(CRot[7]), static_cast<float>(CRot[8]), static_cast<float>(CRot[9]), static_cast<float>(CRot[10]), static_cast<float>(CRot[11]) };
   dsDrawCylinder
   (
     cpos,
@@ -163,8 +163,8 @@ static void simLoop (int pause)
 
   const dReal *SPos = dBodyGetPosition(sphbody);
   const dReal *SRot = dBodyGetRotation(sphbody);
-  float spos[3] = {SPos[0], SPos[1], SPos[2]};
-  float srot[12] = { SRot[0], SRot[1], SRot[2], SRot[3], SRot[4], SRot[5], SRot[6], SRot[7], SRot[8], SRot[9], SRot[10], SRot[11] };
+  float spos[3] = {static_cast<float>(SPos[0]), static_cast<float>(SPos[1]), static_cast<float>(SPos[2])};
+  float srot[12] = { static_cast<float>(SRot[0]), static_cast<float>(SRot[1]), static_cast<float>(SRot[2]), static_cast<float>(SRot[3]), static_cast<float>(SRot[4]), static_cast<float>(SRot[5]), static_cast<float>(SRot[6]), static_cast<float>(SRot[7]), static_cast<float>(SRot[8]), static_cast<float>(SRot[9]), static_cast<float>(SRot[10]), static_cast<float>(SRot[11]) };
   dsDrawSphere
   (
     spos,

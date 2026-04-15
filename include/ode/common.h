@@ -112,7 +112,7 @@ typedef enum {
 typedef enum {
     dDA__MIN,
 
-    dDA__L_MIN = dDA__MIN + dMD_LINEAR * dSA__MAX,
+    dDA__L_MIN = dDA__MIN + (int)dMD_LINEAR * (int)dSA__MAX,
 
     dDA_LX = dDA__L_MIN + dSA_X,
     dDA_LY = dDA__L_MIN + dSA_Y,
@@ -120,7 +120,7 @@ typedef enum {
 
     dDA__L_MAX = dDA__L_MIN + dSA__MAX,
 
-    dDA__A_MIN = dDA__MIN + dMD_ANGULAR * dSA__MAX,
+    dDA__A_MIN = dDA__MIN + (int)dMD_ANGULAR * (int)dSA__MAX,
 
     dDA_AX = dDA__A_MIN + dSA_X,
     dDA_AY = dDA__A_MIN + dSA_Y,
@@ -128,7 +128,7 @@ typedef enum {
 
     dDA__A_MAX = dDA__A_MIN + dSA__MAX,
 
-    dDA__MAX = dDA__MIN + dMD__MAX * dSA__MAX,
+    dDA__MAX = dDA__MIN + (int)dMD__MAX * (int)dSA__MAX,
 } dDynamicsAxis;
 
 typedef enum {
@@ -163,7 +163,7 @@ typedef enum {
 typedef enum {
     dM3E__MIN,
 
-    dM3E__X_MIN = dM3E__MIN + dSA_X * dV3E__MAX,
+    dM3E__X_MIN = dM3E__MIN + (int)dSA_X * (int)dV3E__MAX,
     
     dM3E__X_AXES_MIN = dM3E__X_MIN + dV3E__AXES_MIN,
 
@@ -177,7 +177,7 @@ typedef enum {
 
     dM3E__X_MAX = dM3E__X_MIN + dV3E__MAX,
 
-    dM3E__Y_MIN = dM3E__MIN + dSA_Y * dV3E__MAX,
+    dM3E__Y_MIN = dM3E__MIN + (int)dSA_Y * (int)dV3E__MAX,
 
     dM3E__Y_AXES_MIN = dM3E__Y_MIN + dV3E__AXES_MIN,
 
@@ -191,7 +191,7 @@ typedef enum {
 
     dM3E__Y_MAX = dM3E__Y_MIN + dV3E__MAX,
 
-    dM3E__Z_MIN = dM3E__MIN + dSA_Z * dV3E__MAX,
+    dM3E__Z_MIN = dM3E__MIN + (int)dSA_Z * (int)dV3E__MAX,
 
     dM3E__Z_AXES_MIN = dM3E__Z_MIN + dV3E__AXES_MIN,
 
@@ -205,7 +205,7 @@ typedef enum {
 
     dM3E__Z_MAX = dM3E__Z_MIN + dV3E__MAX,
 
-    dM3E__MAX = dM3E__MIN + dSA__MAX * dV3E__MAX,
+    dM3E__MAX = dM3E__MIN + (int)dSA__MAX * (int)dV3E__MAX,
 } dMat3Element;
 
 typedef enum {
@@ -271,7 +271,7 @@ typedef dReal dVector3[dV3E__MAX];
 typedef dReal dVector4[dV4E__MAX];
 typedef dReal dMatrix3[dM3E__MAX];
 typedef dReal dMatrix4[dM4E__MAX];
-typedef dReal dMatrix6[(dMD__MAX * dV3E__MAX) * (dMD__MAX * dSA__MAX)];
+typedef dReal dMatrix6[((int)dMD__MAX * (int)dV3E__MAX) * ((int)dMD__MAX * (int)dSA__MAX)];
 typedef dReal dQuaternion[dQUE__MAX];
 
 
