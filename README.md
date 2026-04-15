@@ -22,6 +22,8 @@ and built-in collision detection.
 License
 -------
 
+SPDX-License-Identifier: BSD-3-Clause OR LGPL-2.1-or-later
+
 ODE is dual-licensed under either:
 
 - [GNU Lesser General Public License v2.1](LICENSE.TXT) or later.
