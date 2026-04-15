@@ -8,6 +8,21 @@ the rules for this file:
   * keep the format consistent (79 char width, M/D/Y date format).
 
 ------------------------------------------------------------------------------
+04/15/2026 Rodrigo Hernandez
+        * The OU (Objects Unlimited) library dependency was removed. All
+          volatile-based atomic operations were replaced with C++ standard
+          std::atomic. Thread-local storage was rewritten using Windows
+          Fiber-Local Storage (FLS) API on Windows and C++ thread_local
+          with RAII on POSIX, replacing OU's CThreadLocalStorage.
+          The ODE_WITH_OU CMake option has been removed; threading and
+          TLS support is now always built in.
+        * The odeou.h types (CEnumUnsortedElementArray, CEnumSortedElementArray,
+          CSimpleFlags) were reimplemented as standalone C++ templates with
+          no external dependency.
+        * Multi-threaded unit tests were added (tests/threading.cpp) covering
+          threading lifecycle, concurrent world stepping, thread-local storage,
+          concurrent collision, and island parallelism.
+
 01/14/2025 Oleh Derevenko
         * Support for inelastic collitions was added (see dContactInelastic bit of 
           dSurfaceParameters::mode and related inward_force_limit field).

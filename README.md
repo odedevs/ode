@@ -36,10 +36,6 @@ Third-party libraries bundled with ODE:
   - [GNU Lesser General Public License v2.1](GIMPACT/GIMPACT-LICENSE-LGPL.TXT) or later.
   - [Modified 3-clause BSD License](GIMPACT/GIMPACT-LICENSE-BSD.TXT).
 - **libccd** — [Modified 3-clause BSD License](libccd/BSD-LICENSE).
-- **OU/ODER** — triple-licensed under either:
-  - [GNU Lesser General Public License v3](ou/LICENSE-LESSER.TXT) or later.
-  - [Modified 3-clause BSD License](ou/LICENSE-BSD.TXT).
-  - [ZLIB License](ou/LICENSE-ZLIB.TXT).
 - **OPCODE** — under the same terms as ODE. See [OPCODE/COPYING](OPCODE/COPYING).
 
 Links
@@ -107,7 +103,6 @@ cmake -B build -DODE_DOUBLE_PRECISION=ON -DODE_WITH_DEMOS=OFF
 | `ODE_WITH_OPCODE` | Use OPCODE for trimesh collisions | ON |
 | `ODE_WITH_GIMPACT` | Use GIMPACT for trimesh collisions (experimental) | OFF |
 | `ODE_WITH_LIBCCD` | Use libccd for additional collision tests | OFF |
-| `ODE_WITH_OU` | Use TLS for global caches, allows threaded collision checks | OFF |
 | `ODE_16BIT_INDICES` | Use 16-bit trimesh indices instead of 32-bit | OFF |
 | `ODE_NO_THREADING_INTF` | Disable threading interface support | OFF |
 | `BUILD_SHARED_LIBS` | Build shared library instead of static | ON |

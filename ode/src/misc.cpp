@@ -25,51 +25,46 @@
 #include "config.h"
 #include "matrix.h"
 #include "error.h"
-#include "odeou.h"
+#include <atomic>
+#include <cstdint>
 
 //****************************************************************************
 // random numbers
 
-static volatile duint32 seed = 0;
+static std::atomic<uint32_t> seed{0};
 
 unsigned long dRand()
 {
-    duint32 origSeed, newSeed;
-#if !dTHREADING_INTF_DISABLED
+    uint32_t origSeed, newSeed;
     do {
-#endif
-        origSeed = seed;
-        newSeed = ((duint32)1664525 * origSeed + (duint32)1013904223) & (duint32)0xffffffff;
-#if dTHREADING_INTF_DISABLED
-        seed = newSeed;
-#else
-    } while (!AtomicCompareExchange((volatile atomicord32 *)&seed, origSeed, newSeed));
-#endif
+        origSeed = seed.load(std::memory_order_relaxed);
+        newSeed = ((uint32_t)1664525 * origSeed + (uint32_t)1013904223) & (uint32_t)0xffffffff;
+    } while (!seed.compare_exchange_weak(origSeed, newSeed, std::memory_order_relaxed));
     return newSeed;
 }
 
 
 unsigned long  dRandGetSeed()
 {
-    return seed;
+    return seed.load(std::memory_order_relaxed);
 }
 
 
 void dRandSetSeed (unsigned long s)
 {
-    seed = s;
+    seed.store(static_cast<uint32_t>(s), std::memory_order_relaxed);
 }
 
 
 int dTestRand()
 {
-    unsigned long oldseed = seed;
+    uint32_t oldseed = seed.load(std::memory_order_relaxed);
     int ret = 1;
-    seed = 0;
+    seed.store(0, std::memory_order_relaxed);
     if (dRand() != 0x3c6ef35f || dRand() != 0x47502932 ||
         dRand() != 0xd1ccf6e9 || dRand() != 0xaaf95334 ||
         dRand() != 0x6252e503) ret = 0;
-    seed = oldseed;
+    seed.store(oldseed, std::memory_order_relaxed);
     return ret;
 }
 
@@ -78,10 +73,8 @@ int dTestRand()
 int dRandInt (int n)
 {
     int result;
-    // Since there is no memory barrier macro in ODE assign via volatile variable 
-    // to prevent compiler reusing seed as value of `r'
-    volatile unsigned long raw_r = dRand();
-    duint32 r = (duint32)raw_r;
+    // With std::atomic seed, no volatile trick needed to prevent reuse
+    duint32 r = (duint32)dRand();
     
     duint32 un = n;
     dIASSERT(sizeof(n) == sizeof(un));

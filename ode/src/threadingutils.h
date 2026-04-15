@@ -24,176 +24,104 @@
 #define _ODE_THREADINGUTILS_H_
 
 
-#include "odeou.h"
+#include <atomic>
+#include <cstdint>
+#include "typedefs.h"
 
 
-#if !dTHREADING_INTF_DISABLED
-
-static inline 
-bool ThrsafeCompareExchange(volatile atomicord32 *paoDestination, atomicord32 aoComparand, atomicord32 aoExchange)
+static inline
+bool ThrsafeCompareExchange(std::atomic<uint32_t> *paoDestination, uint32_t aoComparand, uint32_t aoExchange)
 {
-    return AtomicCompareExchange(paoDestination, aoComparand, aoExchange);
-}
-
-static inline 
-atomicord32 ThrsafeExchange(volatile atomicord32 *paoDestination, atomicord32 aoExchange)
-{
-    return AtomicExchange(paoDestination, aoExchange);
+    return paoDestination->compare_exchange_strong(aoComparand, aoExchange);
 }
 
 static inline
-void ThrsafeIncrementNoResult(volatile atomicord32 *paoDestination)
+uint32_t ThrsafeExchange(std::atomic<uint32_t> *paoDestination, uint32_t aoExchange)
 {
-    AtomicIncrementNoResult(paoDestination);
+    return paoDestination->exchange(aoExchange);
 }
 
 static inline
-void ThrsafeDecrementNoResult(volatile atomicord32 *paoDestination)
+void ThrsafeIncrementNoResult(std::atomic<uint32_t> *paoDestination)
 {
-    AtomicDecrementNoResult(paoDestination);
+    paoDestination->fetch_add(1);
 }
 
 static inline
-atomicord32 ThrsafeIncrement(volatile atomicord32 *paoDestination)
+void ThrsafeDecrementNoResult(std::atomic<uint32_t> *paoDestination)
 {
-    return AtomicIncrement(paoDestination);
+    paoDestination->fetch_sub(1);
 }
 
 static inline
-atomicord32 ThrsafeDecrement(volatile atomicord32 *paoDestination)
+uint32_t ThrsafeIncrement(std::atomic<uint32_t> *paoDestination)
 {
-    return AtomicDecrement(paoDestination);
+    return paoDestination->fetch_add(1) + 1;
 }
 
 static inline
-void ThrsafeAdd(volatile atomicord32 *paoDestination, atomicord32 aoAddend)
+uint32_t ThrsafeDecrement(std::atomic<uint32_t> *paoDestination)
 {
-    AtomicExchangeAddNoResult(paoDestination, aoAddend);
-}
-
-static inline 
-atomicord32 ThrsafeExchangeAdd(volatile atomicord32 *paoDestination, atomicord32 aoAddend)
-{
-    return AtomicExchangeAdd(paoDestination, aoAddend);
-}
-
-static inline 
-bool ThrsafeCompareExchangePointer(volatile atomicptr *papDestination, atomicptr apComparand, atomicptr apExchange)
-{
-    return AtomicCompareExchangePointer(papDestination, apComparand, apExchange);
-}
-
-static inline 
-atomicptr ThrsafeExchangePointer(volatile atomicptr *papDestination, atomicptr apExchange)
-{
-    return AtomicExchangePointer(papDestination, apExchange);
-}
-
-
-#else // #if dTHREADING_INTF_DISABLED
-
-static inline 
-bool ThrsafeCompareExchange(volatile atomicord32 *paoDestination, atomicord32 aoComparand, atomicord32 aoExchange)
-{
-    return (*paoDestination == aoComparand) ? ((*paoDestination = aoExchange), true) : false;
-}
-
-static inline 
-atomicord32 ThrsafeExchange(volatile atomicord32 *paoDestination, atomicord32 aoExchange)
-{
-    atomicord32 aoDestinationValue = *paoDestination;
-    *paoDestination = aoExchange;
-    return aoDestinationValue;
+    return paoDestination->fetch_sub(1) - 1;
 }
 
 static inline
-void ThrsafeIncrementNoResult(volatile atomicord32 *paoDestination)
+void ThrsafeAdd(std::atomic<uint32_t> *paoDestination, uint32_t aoAddend)
 {
-    ++*paoDestination;
+    paoDestination->fetch_add(aoAddend);
 }
 
 static inline
-void ThrsafeDecrementNoResult(volatile atomicord32 *paoDestination)
+uint32_t ThrsafeExchangeAdd(std::atomic<uint32_t> *paoDestination, uint32_t aoAddend)
 {
-    --*paoDestination;
+    return paoDestination->fetch_add(aoAddend);
 }
 
 static inline
-atomicord32 ThrsafeIncrement(volatile atomicord32 *paoDestination)
+bool ThrsafeCompareExchangePointer(std::atomic<void *> *papDestination, void *apComparand, void *apExchange)
 {
-    return ++*paoDestination;
+    return papDestination->compare_exchange_strong(apComparand, apExchange);
 }
 
 static inline
-atomicord32 ThrsafeDecrement(volatile atomicord32 *paoDestination)
+void *ThrsafeExchangePointer(std::atomic<void *> *papDestination, void *apExchange)
 {
-    return --*paoDestination;
+    return papDestination->exchange(apExchange);
 }
+
 
 static inline
-void ThrsafeAdd(volatile atomicord32 *paoDestination, atomicord32 aoAddend)
-{
-    *paoDestination += aoAddend;
-}
-
-static inline 
-atomicord32 ThrsafeExchangeAdd(volatile atomicord32 *paoDestination, atomicord32 aoAddend)
-{
-    atomicord32 aoDestinationValue = *paoDestination;
-    *paoDestination += aoAddend;
-    return aoDestinationValue;
-}
-
-static inline 
-bool ThrsafeCompareExchangePointer(volatile atomicptr *papDestination, atomicptr apComparand, atomicptr apExchange)
-{
-    return (*papDestination == apComparand) ? ((*papDestination = apExchange), true) : false;
-}
-
-static inline 
-atomicptr ThrsafeExchangePointer(volatile atomicptr *papDestination, atomicptr apExchange)
-{
-    atomicptr apDestinationValue = *papDestination;
-    *papDestination = apExchange;
-    return apDestinationValue;
-}
-
-
-#endif // #if dTHREADING_INTF_DISABLED
-
-
-static inline 
-unsigned int ThrsafeIncrementIntUpToLimit(volatile atomicord32 *storagePointer, unsigned int limitValue)
+unsigned int ThrsafeIncrementIntUpToLimit(std::atomic<uint32_t> *storagePointer, unsigned int limitValue)
 {
     unsigned int resultValue;
     while (true) {
-        resultValue = *storagePointer;
+        resultValue = storagePointer->load();
         // The ">=" comparison is used here to allow continuing incrementing the destination 
         // without waiting for all the threads to pass the barrier of checking its value
         if (resultValue >= limitValue) {
             resultValue = limitValue;
             break;
         }
-        if (ThrsafeCompareExchange(storagePointer, (atomicord32)resultValue, (atomicord32)(resultValue + 1))) {
+        if (storagePointer->compare_exchange_strong(resultValue, resultValue + 1)) {
             break;
         }
     }
     return resultValue;
 }
 
-static inline 
-sizeint ThrsafeIncrementSizeUpToLimit(volatile sizeint *storagePointer, sizeint limitValue)
+static inline
+sizeint ThrsafeIncrementSizeUpToLimit(std::atomic<sizeint> *storagePointer, sizeint limitValue)
 {
     sizeint resultValue;
     while (true) {
-        resultValue = *storagePointer;
+        resultValue = storagePointer->load();
         // The ">=" comparison is not required here at present ("==" could be used). 
         // It is just used this way to match the other function above.
         if (resultValue >= limitValue) {
             resultValue = limitValue;
             break;
         }
-        if (ThrsafeCompareExchangePointer((volatile atomicptr *)storagePointer, (atomicptr)resultValue, (atomicptr)(resultValue + 1))) {
+        if (storagePointer->compare_exchange_strong(resultValue, resultValue + 1)) {
             break;
         }
     }
