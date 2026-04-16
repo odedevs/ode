@@ -30,7 +30,6 @@ option(ODE_WITH_DEMOS "Builds the demo applications and DrawStuff library." ON)
 option(ODE_WITH_GIMPACT "Use GIMPACT for trimesh collisions (experimental)." OFF)
 option(ODE_WITH_LIBCCD "Use libccd for handling some collision tests absent in ODE." OFF)
 option(ODE_WITH_OPCODE "Use old OPCODE trimesh-trimesh collider." ON)
-option(ODE_WITH_OU "Use TLS for global caches (allows threaded collision checks for separated spaces)." OFF)
 option(ODE_WITH_TESTS "Builds the unit test application." ON)
 option(ODE_WIN32_LIB_OUTPUT_NAME_BASED_ON_FLOAT_SIZE "The output name of the library will be based on the size of float, on Windows." ON)
 option(ODE_WIN32_INSTALL_STATIC_LIBS_PDB "Install the PDB files for the static libraries (.lib) on Windows." OFF)
@@ -64,7 +63,7 @@ if(ODE_WITH_DEMOS)
 	list(APPEND CMAKE_REQUIRED_LIBRARIES ${OPENGL_LIBRARIES})
 endif()
 
-if(ODE_WITH_OU OR NOT ODE_NO_THREADING_INTF)
+if(NOT ODE_NO_THREADING_INTF)
 	find_package(Threads REQUIRED)
 	list(APPEND CMAKE_REQUIRED_LIBRARIES ${CMAKE_THREAD_LIBS_INIT})
 endif()
@@ -104,25 +103,6 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "i686.*|x86.*|x86_64.*|amd64.*|AMD64.*")
 endif()
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64.*|amd64.*|AMD64.*")
 	set(X86_64_SYSTEM ON)
-endif()
-if(ODE_WITH_OU)
-	set(_OU_FEATURE_SET _OU_FEATURE_SET_TLS)
-elseif(NOT ODE_NO_THREADING_INTF)
-	set(_OU_FEATURE_SET _OU_FEATURE_SET_ATOMICS)
-else()
-	set(_OU_FEATURE_SET _OU_FEATURE_SET_BASICS)
-endif()
-set(_OU_NAMESPACE odeou)
-if(WIN32 OR CYGWIN)
-	set(_OU_TARGET_OS _OU_TARGET_OS_WINDOWS)
-elseif(APPLE)
-	set(_OU_TARGET_OS _OU_TARGET_OS_MAC)
-elseif(QNXNTO)
-	set(_OU_TARGET_OS _OU_TARGET_OS_QNX)
-elseif(CMAKE_SYSTEM MATCHES "SunOS-4")
-	set(_OU_TARGET_OS _OU_TARGET_OS_SUNOS)
-else()
-	set(_OU_TARGET_OS _OU_TARGET_OS_GENUNIX)
 endif()
 
 cmake_pop_check_state()
@@ -494,10 +474,6 @@ list(
 	ode/src/odeou.h
 	ode/src/odetls.cpp
 	ode/src/odetls.h
-	ou/src/ou/atomic.cpp
-	ou/src/ou/customization.cpp
-	ou/src/ou/malloc.cpp
-	ou/src/ou/threadlocalstorage.cpp
 )
 
 # Makes life with Visual Studio easier (includes also the headers in the project):
@@ -552,11 +528,7 @@ endif()
 target_compile_definitions(
 	ODE
 	PRIVATE
-	-D_OU_NAMESPACE=${_OU_NAMESPACE}
-	-D_OU_FEATURE_SET=${_OU_FEATURE_SET}
-	-D_OU_TARGET_OS=${_OU_TARGET_OS}
 	$<$<NOT:$<CONFIG:Debug>>:dNODEBUG>
-	-DdOU_ENABLED
 )
 
 if(APPLE)
@@ -593,7 +565,6 @@ target_include_directories(
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ode/src>
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ode/src/joints>
-	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ou/include>
 	$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
@@ -686,13 +657,7 @@ if(ODE_WITH_OPCODE AND NOT ODE_NO_TRIMESH)
 	)
 endif()
 
-if(ODE_WITH_OU)
-	target_compile_definitions(ODE PRIVATE -DdATOMICS_ENABLED -DdTLS_ENABLED)
-elseif(NOT ODE_NO_THREADING_INTF)
-	target_compile_definitions(ODE PRIVATE -DdATOMICS_ENABLED)
-endif()
-
-if(ODE_WITH_OU OR NOT ODE_NO_THREADING_INTF)
+if(NOT ODE_NO_THREADING_INTF)
 	target_link_libraries(ODE PRIVATE ${CMAKE_THREAD_LIBS_INIT})
 endif()
 
@@ -899,6 +864,7 @@ if(ODE_WITH_TESTS)
 		tests/joint.cpp
 		tests/main.cpp
 		tests/odemath.cpp
+		tests/threading.cpp
 		tests/joints/amotor.cpp
 		tests/joints/ball.cpp
 		tests/joints/dball.cpp

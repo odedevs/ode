@@ -122,7 +122,7 @@ void ThreadedEquationSolverLDLT::doCooperativelyScaleVectorValidated(
     dCallWaitID completionWait = resourceContainer->getStockCallWait();
     dAASSERT(completionWait != NULL);
 
-    atomicord32 blockCompletionProgress;
+    std::atomic<uint32_t> blockCompletionProgress{0};
 
     initializeCooperativelyScaleVectorMemoryStructures(blockCompletionProgress);
 

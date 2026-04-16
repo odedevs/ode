@@ -29,6 +29,8 @@
 
 
 
+#include <atomic>
+#include <cstdint>
 #include "threadingutils.h"
 #include "common.h"
 #include "error.h"
@@ -36,12 +38,12 @@
 
 #ifndef dCOOPERATIVE_ENABLED
 
-#if dATOMICS_ENABLED && !dTHREADING_INTF_DISABLED
+#if !dTHREADING_INTF_DISABLED
 
 #define dCOOPERATIVE_ENABLED 1
 
 
-#endif // #if dATOMICS_ENABLED && !dTHREADING_INTF_DISABLED
+#endif // #if !dTHREADING_INTF_DISABLED
 
 
 #endif // #ifndef dCOOPERATIVE_ENABLED
@@ -108,37 +110,37 @@ enum BlockProcessingState
 class CooperativeAtomics
 {
 public:
-    static atomicord32 AtomicDecrementUint32(volatile atomicord32 *paoDestination)
+    static uint32_t AtomicDecrementUint32(std::atomic<uint32_t> *paoDestination)
     {
 #if dCOOPERATIVE_ENABLED
-        return ::AtomicDecrement(paoDestination);
+        return paoDestination->fetch_sub(1) - 1;
 #else
         dIASSERT(false); return 0; // The function is not supposed to be called in this case
 #endif // #if dCOOPERATIVE_ENABLED
     }
 
-    static bool AtomicCompareExchangeUint32(volatile atomicord32 *paoDestination, atomicord32 aoComparand, atomicord32 aoExchange)
+    static bool AtomicCompareExchangeUint32(std::atomic<uint32_t> *paoDestination, uint32_t aoComparand, uint32_t aoExchange)
     {
 #if dCOOPERATIVE_ENABLED
-        return ::AtomicCompareExchange(paoDestination, aoComparand, aoExchange);
+        return paoDestination->compare_exchange_strong(aoComparand, aoExchange);
 #else
         dIASSERT(false); return false; // The function is not supposed to be called in this case
 #endif // #if dCOOPERATIVE_ENABLED
     }
 
-    static bool AtomicCompareExchangeCellindexint(volatile cellindexint *destination, cellindexint comparand, cellindexint exchange)
+    static bool AtomicCompareExchangeCellindexint(std::atomic<cellindexint> *destination, cellindexint comparand, cellindexint exchange)
     {
 #if dCOOPERATIVE_ENABLED
-        return ::AtomicCompareExchangePointer((volatile atomicptr *)destination, (atomicptr)comparand, (atomicptr)exchange);
+        return destination->compare_exchange_strong(comparand, exchange);
 #else
         dIASSERT(false); return false; // The function is not supposed to be called in this case
 #endif // #if dCOOPERATIVE_ENABLED
     }
 
-    static void AtomicStoreCellindexint(volatile cellindexint *destination, cellindexint value)
+    static void AtomicStoreCellindexint(std::atomic<cellindexint> *destination, cellindexint value)
     {
 #if dCOOPERATIVE_ENABLED
-        ::AtomicStorePointer((volatile atomicptr *)destination, (atomicptr)value);
+        destination->store(value);
 #else
         dIASSERT(false); // The function is not supposed to be called in this case
 #endif // #if dCOOPERATIVE_ENABLED
@@ -147,7 +149,7 @@ public:
     static void AtomicReadReorderBarrier()
     {
 #if dCOOPERATIVE_ENABLED
-        ::AtomicReadReorderBarrier();
+        std::atomic_thread_fence(std::memory_order_acquire);
 #else
         dIASSERT(false); // The function is not supposed to be called in this case
 #endif // #if dCOOPERATIVE_ENABLED

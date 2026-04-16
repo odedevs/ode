@@ -31,6 +31,8 @@
 #define _ODE_THREADED_SOLVER_LDLT_H_
 
 
+#include <atomic>
+#include <cstdint>
 #include "coop_matrix_types.h"
 #include <ode/threading.h>
 
@@ -142,26 +144,26 @@ private:
 
     static void *markCooperativelySolvingL1Stripe_XMemoryStructuresOut(void *buffer, 
         const FactorizationSolvingL1StripeMemoryEstimates &memoryEstimates, 
-        cellindexint *&out_blockProgressDescriptors, FactorizationSolveL1StripeCellContext *&out_cellContexts)
+        std::atomic<cellindexint> *&out_blockProgressDescriptors, FactorizationSolveL1StripeCellContext *&out_cellContexts)
     {
         void *currentLocation = buffer;
 
-        out_blockProgressDescriptors = (cellindexint *)currentLocation; currentLocation = (uint8 *)currentLocation + memoryEstimates.m_descriptorSizeRequired;
+        out_blockProgressDescriptors = (std::atomic<cellindexint> *)currentLocation; currentLocation = (uint8 *)currentLocation + memoryEstimates.m_descriptorSizeRequired;
         out_cellContexts = (FactorizationSolveL1StripeCellContext *)currentLocation; currentLocation = (uint8 *)currentLocation + memoryEstimates.m_contextSizeRequired;
 
         return currentLocation;
     }
 
     static void initializeCooperativelySolvingL1Stripe_XMemoryStructures(unsigned blockCount, 
-        atomicord32 &out_blockCompletionProgress, cellindexint *blockProgressDescriptors, FactorizationSolveL1StripeCellContext *dUNUSED(cellContexts))
+        std::atomic<uint32_t> &out_blockCompletionProgress, std::atomic<cellindexint> *blockProgressDescriptors, FactorizationSolveL1StripeCellContext *dUNUSED(cellContexts))
     {
-        out_blockCompletionProgress = 0;
+        out_blockCompletionProgress.store(0);
         memset(blockProgressDescriptors, 0, blockCount * sizeof(*blockProgressDescriptors));
     }
 
     template<unsigned int block_step, unsigned int b_rows>
     static void participateSolvingL1Stripe_X(const dReal *L, dReal *B, unsigned blockCount, unsigned rowSkip, 
-        volatile atomicord32 &refBlockCompletionProgress/*=0*/, volatile cellindexint *blockProgressDescriptors/*=[blockCount]*/, 
+        std::atomic<uint32_t> &refBlockCompletionProgress/*=0*/, std::atomic<cellindexint> *blockProgressDescriptors/*=[blockCount]*/, 
         FactorizationSolveL1StripeCellContext *cellContexts/*=[CCI__MAX x blockCount] + [blockCount]*/, unsigned ownThreadIndex);
 
     static unsigned deriveScalingAndFactorizingL1StripeBlockCountFromSolvingBlockIndex(unsigned solvingBlockIndex, unsigned solvingBlockStep, unsigned blockARows)
@@ -242,7 +244,7 @@ private:
     {
         FactorLDLTWorkerContext(dxThreadingBase *threading, unsigned allowedThreadCount, 
             dReal *A, dReal *d, unsigned totalBlockCount, unsigned rowCount, unsigned rowSkip, 
-            atomicord32 &ref_solvingBlockCompletionProgress, cellindexint *solvingBlockProgressDescriptors, 
+            std::atomic<uint32_t> &ref_solvingBlockCompletionProgress, std::atomic<cellindexint> *solvingBlockProgressDescriptors, 
             FactorizationSolveL1StripeCellContext *solvingCellContexts, 
             FactorizationFactorizeL1StripeContext *factorizingFactorizationContext,
             dCallReleaseeID calculationFinishReleasee):
@@ -280,8 +282,8 @@ private:
         unsigned                    m_totalBlockCount;
         unsigned                    m_rowCount;
         unsigned                    m_rowSkip;
-        atomicord32                 &m_refSolvingBlockCompletionProgress;
-        cellindexint                *m_solvingBlockProgressDescriptors;
+        std::atomic<uint32_t>       &m_refSolvingBlockCompletionProgress;
+        std::atomic<cellindexint>   *m_solvingBlockProgressDescriptors;
         FactorizationSolveL1StripeCellContext *m_solvingCellContexts; 
         FactorizationFactorizeL1StripeContext *m_factorizingFactorizationContext;
         dCallReleaseeID             m_calculationFinishReleasee;
@@ -431,15 +433,15 @@ private:
     {
         void initialize(unsigned threadCount)
         {
-            m_threadsRunning = threadCount;
-            m_nextColumnIndex = 0;
-            m_sumThreadIndex = 0;
+            m_threadsRunning.store(threadCount);
+            m_nextColumnIndex.store(0);
+            m_sumThreadIndex.store(0);
         }
 
-        atomicord32 m_threadsRunning;
-        atomicord32 m_nextColumnIndex;
-        volatile atomicord32 m_sumThreadIndex;
-        atomicord32 m_reserved[1]; // [13]; // for alignment
+        std::atomic<uint32_t> m_threadsRunning;
+        std::atomic<uint32_t> m_nextColumnIndex;
+        std::atomic<uint32_t> m_sumThreadIndex;
+        uint32_t m_reserved[1]; // [13]; // for alignment
         FactorizationFactorizeL1StripeThreadContext m_threadContexts[1]; // =[threadCount]
     };
 
@@ -493,28 +495,28 @@ private:
 
     static void *markCooperativelySolvingL1StraightMemoryStructuresOut(void *buffer, 
         const SolvingL1StraightMemoryEstimates &solvingMemoryEstimates, 
-        cellindexint *&out_blockProgressDescriptors, SolveL1StraightCellContext *&out_cellContexts)
+        std::atomic<cellindexint> *&out_blockProgressDescriptors, SolveL1StraightCellContext *&out_cellContexts)
     {
         void *currentLocation = buffer;
 
-        out_blockProgressDescriptors = (cellindexint *)currentLocation; currentLocation = (uint8 *)currentLocation + solvingMemoryEstimates.m_descriptorSizeRequired;
+        out_blockProgressDescriptors = (std::atomic<cellindexint> *)currentLocation; currentLocation = (uint8 *)currentLocation + solvingMemoryEstimates.m_descriptorSizeRequired;
         out_cellContexts = (SolveL1StraightCellContext *)currentLocation; currentLocation = (uint8 *)currentLocation + solvingMemoryEstimates.m_contextSizeRequired;
         return currentLocation;
     }
 
     template<unsigned int block_step>
     static void initializeCooperativelySolveL1StraightMemoryStructures(unsigned rowCount, 
-        atomicord32 &out_blockCompletionProgress, cellindexint *blockProgressDescriptors, SolveL1StraightCellContext *cellContexts);
+        std::atomic<uint32_t> &out_blockCompletionProgress, std::atomic<cellindexint> *blockProgressDescriptors, SolveL1StraightCellContext *cellContexts);
     template<unsigned int block_step, unsigned int b_stride>
     static void participateSolvingL1Straight(const dReal *L, dReal *B, unsigned rowCount, unsigned rowSkip, 
-        volatile atomicord32 &refBlockCompletionProgress/*=0*/, volatile cellindexint *blockProgressDescriptors/*=[blockCount]*/, 
+        std::atomic<uint32_t> &refBlockCompletionProgress/*=0*/, std::atomic<cellindexint> *blockProgressDescriptors/*=[blockCount]*/, 
         SolveL1StraightCellContext *cellContexts/*=[CCI__MAX x blockCount] + [blockCount]*/, unsigned ownThreadIndex);
 
 private:
     struct SolveL1StraightWorkerContext
     {
         void init(const dReal *L, dReal *b, unsigned rowCount, unsigned rowSkip, 
-            atomicord32 &ref_blockCompletionProgress, cellindexint *blockProgressDescriptors, SolveL1StraightCellContext *cellContexts)
+            std::atomic<uint32_t> &ref_blockCompletionProgress, std::atomic<cellindexint> *blockProgressDescriptors, SolveL1StraightCellContext *cellContexts)
         {
             m_L = L;
             m_b = b;
@@ -529,8 +531,8 @@ private:
         dReal           *m_b;
         unsigned        m_rowCount;
         unsigned        m_rowSkip; 
-        atomicord32     *m_ptrBlockCompletionProgress;
-        cellindexint    *m_blockProgressDescriptors;
+        std::atomic<uint32_t>     *m_ptrBlockCompletionProgress;
+        std::atomic<cellindexint> *m_blockProgressDescriptors;
         SolveL1StraightCellContext *m_cellContexts;
     };
 
@@ -628,11 +630,11 @@ private:
 
     static void *markCooperativelySolvingL1TransposedMemoryStructuresOut(void *buffer, 
         const SolvingL1TransposedMemoryEstimates &solvingMemoryEstimates, 
-        cellindexint *&out_blockProgressDescriptors, SolveL1TransposedCellContext *&out_cellContexts)
+        std::atomic<cellindexint> *&out_blockProgressDescriptors, SolveL1TransposedCellContext *&out_cellContexts)
     {
         void *currentLocation = buffer;
 
-        out_blockProgressDescriptors = (cellindexint *)currentLocation; currentLocation = (uint8 *)currentLocation + solvingMemoryEstimates.m_descriptorSizeRequired;
+        out_blockProgressDescriptors = (std::atomic<cellindexint> *)currentLocation; currentLocation = (uint8 *)currentLocation + solvingMemoryEstimates.m_descriptorSizeRequired;
         out_cellContexts = (SolveL1TransposedCellContext *)currentLocation; currentLocation = (uint8 *)currentLocation + solvingMemoryEstimates.m_contextSizeRequired;
         return currentLocation;
     }
@@ -642,17 +644,17 @@ private:
         cellindexint *&out_blockProgressDescriptors, SolveL1TransposedCellContext *&out_cellContexts);
     template<unsigned int block_step>
     static void initializeCooperativelySolveL1TransposedMemoryStructures(unsigned rowCount, 
-        atomicord32 &out_blockCompletionProgress, cellindexint *blockProgressDescriptors, SolveL1TransposedCellContext *cellContexts);
+        std::atomic<uint32_t> &out_blockCompletionProgress, std::atomic<cellindexint> *blockProgressDescriptors, SolveL1TransposedCellContext *cellContexts);
     template<unsigned int block_step, unsigned int b_stride>
     static void participateSolvingL1Transposed(const dReal *L, dReal *B, unsigned rowCount, unsigned rowSkip, 
-        volatile atomicord32 &refBlockCompletionProgress/*=0*/, volatile cellindexint *blockProgressDescriptors/*=[blockCount]*/, 
+        std::atomic<uint32_t> &refBlockCompletionProgress/*=0*/, std::atomic<cellindexint> *blockProgressDescriptors/*=[blockCount]*/, 
         SolveL1TransposedCellContext *cellContexts/*=[CCI__MAX x blockCount] + [blockCount]*/, unsigned ownThreadIndex);
 
 private:
     struct SolveL1TransposedWorkerContext
     {
         void init(const dReal *L, dReal *b, unsigned rowCount, unsigned rowSkip, 
-            atomicord32 &ref_blockCompletionProgress, cellindexint *blockProgressDescriptors, SolveL1TransposedCellContext *cellContexts)
+            std::atomic<uint32_t> &ref_blockCompletionProgress, std::atomic<cellindexint> *blockProgressDescriptors, SolveL1TransposedCellContext *cellContexts)
         {
             m_L = L;
             m_b = b;
@@ -667,8 +669,8 @@ private:
         dReal           *m_b;
         unsigned        m_rowCount;
         unsigned        m_rowSkip; 
-        atomicord32     *m_ptrBlockCompletionProgress;
-        cellindexint    *m_blockProgressDescriptors;
+        std::atomic<uint32_t>     *m_ptrBlockCompletionProgress;
+        std::atomic<cellindexint> *m_blockProgressDescriptors;
         SolveL1TransposedCellContext *m_cellContexts;
     };
 
@@ -746,19 +748,19 @@ private:
         return maximumCount >= allowedThreadCount ? allowedThreadCount : dMACRO_MAX(maximumCount, 1U);
     }
 
-    static void initializeCooperativelyScaleVectorMemoryStructures(atomicord32 &out_blockCompletionProgress)
+    static void initializeCooperativelyScaleVectorMemoryStructures(std::atomic<uint32_t> &out_blockCompletionProgress)
     {
-        out_blockCompletionProgress = 0;
+        out_blockCompletionProgress.store(0);
     }
     template<unsigned int block_step, unsigned int a_stride, unsigned int d_stride>
     static void participateScalingVector(dReal *ptrAStart, const dReal *ptrDStart, const unsigned elementCount,
-        volatile atomicord32 &refBlockCompletionProgress/*=0*/);
+        std::atomic<uint32_t> &refBlockCompletionProgress/*=0*/);
 
 private:
     struct ScaleVectorWorkerContext
     {
         void init(dReal *vectorData, const dReal *scaleData, unsigned elementCount, 
-            atomicord32 &ref_blockCompletionProgress)
+            std::atomic<uint32_t> &ref_blockCompletionProgress)
         {
             m_vectorData = vectorData;
             m_scaleData = scaleData;
@@ -769,7 +771,7 @@ private:
         dReal           *m_vectorData;
         const dReal     *m_scaleData;
         unsigned        m_elementCount;
-        atomicord32     *m_ptrBlockCompletionProgress;
+        std::atomic<uint32_t>     *m_ptrBlockCompletionProgress;
     };
 
     static int scaleVector_worker_callback(void *callContext, dcallindex_t callInstanceIndex, dCallReleaseeID callThisReleasee);

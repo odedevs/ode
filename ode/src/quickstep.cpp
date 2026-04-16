@@ -34,6 +34,8 @@
 #include "util.h"
 #include "threadingutils.h"
 
+#include <atomic>
+#include <cstdint>
 #include <new>
 
 
@@ -556,9 +558,9 @@ struct dxQuickStepperStage0BodiesCallContext
 
     const dxStepperProcessingCallContext *m_stepperCallContext;
     dReal                           *m_invI;
-    atomicord32                     m_tagsTaken;
-    atomicord32                     m_gravityTaken;
-    volatile atomicord32            m_inertiaBodyIndex;
+    std::atomic<uint32_t>           m_tagsTaken;
+    std::atomic<uint32_t>           m_gravityTaken;
+    std::atomic<uint32_t>           m_inertiaBodyIndex;
 };
 
 struct dxQuickStepperStage0JointsCallContext
@@ -608,7 +610,7 @@ struct dxQuickStepperLocalContext
     unsigned int                    m_nj;
     unsigned int                    m_m;
     unsigned int                    m_mfb;
-    volatile atomicord32            m_valid_findices;
+    std::atomic<uint32_t>           m_valid_findices;
     const dxMIndexItem              *m_mindex;
     dxJBodiesItem                   *m_jb;
     int                             *m_findex;
@@ -648,10 +650,10 @@ struct dxQuickStepperStage2CallContext
     const dxStepperProcessingCallContext *m_stepperCallContext;
     dxQuickStepperLocalContext      *m_localContext;
     dReal                           *m_rhs_tmp;
-    volatile atomicord32            m_ji_J;
-    volatile atomicord32            m_ji_jb;
-    volatile atomicord32            m_bi;
-    volatile atomicord32            m_Jrhsi;
+    std::atomic<uint32_t>           m_ji_J;
+    std::atomic<uint32_t>           m_ji_jb;
+    std::atomic<uint32_t>           m_bi;
+    std::atomic<uint32_t>           m_Jrhsi;
 };
 
 static int dxQuickStepIsland_Stage2a_Callback(void *callContext, dcallindex_t callInstanceIndex, dCallReleaseeID callThisReleasee);
@@ -686,7 +688,7 @@ struct dxQuickStepperStage4CallContext
 {
     void Initialize(const dxStepperProcessingCallContext *callContext, const dxQuickStepperLocalContext *localContext, 
         dReal *lambda, dReal *cforce, dReal *forceMaxAdjustments, dReal *iMJ, IndexError *order, dReal *last_lambda, 
-        atomicord32 *bi_links_or_mi_levels, atomicord32 *mi_links)
+        std::atomic<uint32_t> *bi_links_or_mi_levels, std::atomic<uint32_t> *mi_links)
     {
         m_stepperCallContext = callContext;
         m_localContext = localContext;
@@ -760,33 +762,33 @@ struct dxQuickStepperStage4CallContext
     dReal                           *m_iMJ;
     IndexError                      *m_order;
     dReal                           *m_last_lambda;
-    atomicord32                     *m_bi_links_or_mi_levels;
-    atomicord32                     *m_mi_links;
+    std::atomic<uint32_t>           *m_bi_links_or_mi_levels;
+    std::atomic<uint32_t>           *m_mi_links;
     dReal                           m_LCP_iteration_premature_exit_delta;
     dCallReleaseeID                 m_LCP_IterationSyncReleasee;
     unsigned int                    m_LCP_IterationAllowedThreads;
     dCallReleaseeID                 m_LCP_fcStartReleasee;
-    volatile atomicord32            m_ji_4a;
-    volatile atomicord32            m_mi_iMJ;
-    volatile atomicord32            m_bi_forceMaxAdj;
-    volatile atomicord32            m_bi_fc;
-    volatile atomicord32            m_LCP_fcPrepareThreadsRemaining;
+    std::atomic<uint32_t>           m_ji_4a;
+    std::atomic<uint32_t>           m_mi_iMJ;
+    std::atomic<uint32_t>           m_bi_forceMaxAdj;
+    std::atomic<uint32_t>           m_bi_fc;
+    std::atomic<uint32_t>           m_LCP_fcPrepareThreadsRemaining;
     unsigned int                    m_LCP_fcCompleteThreadsTotal;
-    volatile atomicord32            m_mi_Ad;
+    std::atomic<uint32_t>           m_mi_Ad;
     unsigned int                    m_LCP_iteration;
     unsigned int                    m_LCP_extra_num_iterations;
     unsigned int                    m_LCP_iterationThreadsTotal;
-    volatile atomicord32            m_LCP_iterationThreadsRemaining;
+    std::atomic<uint32_t>           m_LCP_iterationThreadsRemaining;
     dCallReleaseeID                 m_LCP_iterationNextReleasee;
-    volatile atomicord32            m_SOR_reorderHeadTaken;
-    volatile atomicord32            m_SOR_reorderTailTaken;
-    volatile atomicord32            m_SOR_bi_zeroHeadTaken;
-    volatile atomicord32            m_SOR_bi_zeroTailTaken;
-    volatile atomicord32            m_SOR_mi_zeroHeadTaken;
-    volatile atomicord32            m_SOR_mi_zeroTailTaken;
-    volatile atomicord32            m_SOR_reorderThreadsRemaining;
-    volatile atomicord32            m_cf_4b;
-    volatile atomicord32            m_ji_4b;
+    std::atomic<uint32_t>           m_SOR_reorderHeadTaken;
+    std::atomic<uint32_t>           m_SOR_reorderTailTaken;
+    std::atomic<uint32_t>           m_SOR_bi_zeroHeadTaken;
+    std::atomic<uint32_t>           m_SOR_bi_zeroTailTaken;
+    std::atomic<uint32_t>           m_SOR_mi_zeroHeadTaken;
+    std::atomic<uint32_t>           m_SOR_mi_zeroTailTaken;
+    std::atomic<uint32_t>           m_SOR_reorderThreadsRemaining;
+    std::atomic<uint32_t>           m_cf_4b;
+    std::atomic<uint32_t>           m_ji_4b;
 };
 
 
@@ -847,8 +849,8 @@ struct dxQuickStepperStage6CallContext
 
     const dxStepperProcessingCallContext *m_stepperCallContext;
     const dxQuickStepperLocalContext *m_localContext;
-    volatile atomicord32            m_bi_6a;
-    volatile atomicord32            m_bi_6b;
+    std::atomic<uint32_t>           m_bi_6a;
+    std::atomic<uint32_t>           m_bi_6b;
 };
 
 static int dxQuickStepIsland_Stage6a_Callback(void *callContext, dcallindex_t callInstanceIndex, dCallReleaseeID callThisReleasee);
@@ -865,7 +867,7 @@ static void dxQuickStepIsland_Stage6b(dxQuickStepperStage6CallContext *stage6Cal
 // compute iMJ = inv(M)*J'
 
 template<unsigned int step_size>
-void compute_invM_JT (volatile atomicord32 *mi_storage, dReal *iMJ, 
+void compute_invM_JT (std::atomic<uint32_t> *mi_storage, dReal *iMJ, 
     unsigned int m, const dReal *J, const dxJBodiesItem *jb,
     dxBody * const *body, const dReal *invI, bool dynamicIterationCountAdjustmentEnabled)
 {
@@ -908,7 +910,7 @@ void compute_invM_JT (volatile atomicord32 *mi_storage, dReal *iMJ,
 #ifdef WARM_STARTING
 
 static 
-void multiply_invM_JT_init_array(unsigned int nb, atomicord32 *bi_links/*=[nb]*/)
+void multiply_invM_JT_init_array(unsigned int nb, std::atomic<uint32_t> *bi_links/*=[nb]*/)
 {
     // const unsigned businessIndex_none = dxENCODE_INDEX(-1);
     // for (unsigned int bi = 0; bi != nb; ++bi) {
@@ -919,8 +921,8 @@ void multiply_invM_JT_init_array(unsigned int nb, atomicord32 *bi_links/*=[nb]*/
 
 // compute out = inv(M)*J'*in.
 template<unsigned int step_size>
-void multiply_invM_JT_prepare(volatile atomicord32 *mi_storage, 
-    unsigned int m, const dxJBodiesItem *jb, atomicord32 *bi_links/*=[nb]*/, atomicord32 *mi_links/*=[2*m]*/)
+void multiply_invM_JT_prepare(std::atomic<uint32_t> *mi_storage, 
+    unsigned int m, const dxJBodiesItem *jb, std::atomic<uint32_t> *bi_links/*=[nb]*/, std::atomic<uint32_t> *mi_links/*=[2*m]*/)
 {
     unsigned int m_steps = (m + (step_size - 1)) / step_size;
 
@@ -950,9 +952,9 @@ void multiply_invM_JT_prepare(volatile atomicord32 *mi_storage,
 }
 
 template<unsigned int step_size, unsigned int out_offset, unsigned int out_stride>
-void multiply_invM_JT_complete(volatile atomicord32 *bi_storage, dReal *out, 
+void multiply_invM_JT_complete(std::atomic<uint32_t> *bi_storage, dReal *out, 
     unsigned int nb, const dReal *iMJ, const dxJBodiesItem *jb, const dReal *in, 
-    atomicord32 *bi_links/*=[nb]*/, atomicord32 *mi_links/*=[2*m]*/)
+    std::atomic<uint32_t> *bi_links/*=[nb]*/, std::atomic<uint32_t> *mi_links/*=[2*m]*/)
 {
     const unsigned businessIndex_none = dxENCODE_INDEX(-1);
 
@@ -1029,7 +1031,7 @@ void _multiply_invM_JT (dReal *out,
 
 // compute out = J*in.
 template<unsigned int step_size, unsigned int in_offset, unsigned int in_stride>
-void multiplyAdd_J (volatile atomicord32 *mi_storage, 
+void multiplyAdd_J (std::atomic<uint32_t> *mi_storage, 
     unsigned int m, dReal *J, const dxJBodiesItem *jb, const dReal *in)
 {
     unsigned int m_steps = (m + (step_size - 1)) / step_size;
@@ -1840,11 +1842,11 @@ void dxQuickStepIsland_Stage3(dxQuickStepperStage3CallContext *stage3CallContext
         bool singleThreadedExecution = allowedThreads == 1;
         dIASSERT(allowedThreads >= 1);
 
-        atomicord32 *bi_links_or_mi_levels = NULL;
-        atomicord32 *mi_links = NULL;
+        std::atomic<uint32_t> *bi_links_or_mi_levels = NULL;
+        std::atomic<uint32_t> *mi_links = NULL;
 #if !dTHREADING_INTF_DISABLED
-        bi_links_or_mi_levels = memarena->AllocateArray<atomicord32>(dMAX(nb, m));
-        mi_links = memarena->AllocateArray<atomicord32>(2 * ((sizeint)m + 1));
+        bi_links_or_mi_levels = memarena->AllocateArray<std::atomic<uint32_t>>(dMAX(nb, m));
+        mi_links = memarena->AllocateArray<std::atomic<uint32_t>>(2 * ((sizeint)m + 1));
 #else
         dIASSERT(singleThreadedExecution);
 #endif
@@ -1877,7 +1879,7 @@ void dxQuickStepIsland_Stage3(dxQuickStepperStage3CallContext *stage3CallContext
                 if (iteration - extra_num_iterations == num_iterations) {
                     if (extra_num_iterations != 0 || world->qs.m_maxExtraIterationCount == 0) {
                         if (extra_num_iterations != 0) {
-                            volatile atomicord32 *fullExtraExecutionsStorage = world->qs.GetStatisticsFullExtraExecutionsStorage();
+                            std::atomic<uint32_t> *fullExtraExecutionsStorage = world->qs.GetStatisticsFullExtraExecutionsStorage();
                             ThrsafeIncrementNoResult(fullExtraExecutionsStorage);
                         }
                         break;
@@ -1889,11 +1891,11 @@ void dxQuickStepIsland_Stage3(dxQuickStepperStage3CallContext *stage3CallContext
 
                 if (dynamicIterationCountAdjustmentEnabled && CheckForMaximumToBeLessThanLimitAndResetMaxAdjustments(stage4CallContext->m_forceMaxAdjustments, nb, prematureExitDelta)) {
                     if (iteration < num_iterations) {
-                        volatile atomicord32 *prematureExitsStorage = world->qs.GetStatisticsPrematureExitsStorage();
+                        std::atomic<uint32_t> *prematureExitsStorage = world->qs.GetStatisticsPrematureExitsStorage();
                         ThrsafeIncrementNoResult(prematureExitsStorage);
                     }
                     else if (iteration > num_iterations) {
-                        volatile atomicord32 *prolongedExecutionsStorage = world->qs.GetStatisticsProlongedExecutionsStorage();
+                        std::atomic<uint32_t> *prolongedExecutionsStorage = world->qs.GetStatisticsProlongedExecutionsStorage();
                         ThrsafeIncrementNoResult(prolongedExecutionsStorage);
                     }
                     break;
@@ -2161,7 +2163,7 @@ void dxQuickStepIsland_Stage4LCP_MTfcComputation_warmZeroArrays(dxQuickStepperSt
     const dxStepperProcessingCallContext *callContext = stage4CallContext->m_stepperCallContext;
 
     unsigned int nb = callContext->m_islandBodiesCount;
-    atomicord32 *bi_links = stage4CallContext->m_bi_links_or_mi_levels;
+    std::atomic<uint32_t> *bi_links = stage4CallContext->m_bi_links_or_mi_levels;
 
     multiply_invM_JT_init_array(nb, bi_links);
 }
@@ -2418,11 +2420,11 @@ int dxQuickStepIsland_Stage4LCP_IterationStart_Callback(void *_stage4CallContext
         && world->qs.GetIsDynamicIterationCountAdjustmentEnabled()
         && CheckForMaximumToBeLessThanLimitAndResetMaxAdjustments(stage4CallContext->m_forceMaxAdjustments, callContext->m_islandBodiesCount, stage4CallContext->m_LCP_iteration_premature_exit_delta)) {
         if (iteration < num_iterations) {
-            volatile atomicord32 *prematureExitsStorage = world->qs.GetStatisticsPrematureExitsStorage();
+            std::atomic<uint32_t> *prematureExitsStorage = world->qs.GetStatisticsPrematureExitsStorage();
             ThrsafeIncrementNoResult(prematureExitsStorage);
         }
         else if (iteration > num_iterations) {
-            volatile atomicord32 *prolongedExecutionsStorage = world->qs.GetStatisticsProlongedExecutionsStorage();
+            std::atomic<uint32_t> *prolongedExecutionsStorage = world->qs.GetStatisticsProlongedExecutionsStorage();
             ThrsafeIncrementNoResult(prolongedExecutionsStorage);
         }
         abortIterating = true;
@@ -2452,7 +2454,7 @@ int dxQuickStepIsland_Stage4LCP_IterationStart_Callback(void *_stage4CallContext
         if (iteration + 1 - stage4CallContext->m_LCP_extra_num_iterations == num_iterations) {
             if (stage4CallContext->m_LCP_extra_num_iterations != 0 || world->qs.m_maxExtraIterationCount == 0) {
                 if (stage4CallContext->m_LCP_extra_num_iterations != 0) {
-                    volatile atomicord32 *fullExtraExecutionsStorage = world->qs.GetStatisticsFullExtraExecutionsStorage();
+                    std::atomic<uint32_t> *fullExtraExecutionsStorage = world->qs.GetStatisticsFullExtraExecutionsStorage();
                     ThrsafeIncrementNoResult(fullExtraExecutionsStorage);
                 }
                 lastIteration = true;
@@ -2680,23 +2682,23 @@ void dxQuickStepIsland_Stage4LCP_LinksArraysZeroing(dxQuickStepperStage4CallCont
     const dxQuickStepperLocalContext *localContext = stage4CallContext->m_localContext;
     
     if (ThrsafeExchange(&stage4CallContext->m_SOR_bi_zeroHeadTaken, 1) == 0) {
-        atomicord32 *bi_links = stage4CallContext->m_bi_links_or_mi_levels;/*=[nb]*/
+        std::atomic<uint32_t> *bi_links = stage4CallContext->m_bi_links_or_mi_levels;/*=[nb]*/
         unsigned int nb = callContext->m_islandBodiesCount;
         memset(bi_links, 0, sizeof(bi_links[0]) * (nb / 2));
     }
     if (ThrsafeExchange(&stage4CallContext->m_SOR_bi_zeroTailTaken, 1) == 0) {
-        atomicord32 *bi_links = stage4CallContext->m_bi_links_or_mi_levels;/*=[nb]*/
+        std::atomic<uint32_t> *bi_links = stage4CallContext->m_bi_links_or_mi_levels;/*=[nb]*/
         unsigned int nb = callContext->m_islandBodiesCount;
         memset(bi_links + nb / 2, 0, sizeof(bi_links[0]) * (nb - nb / 2));
     }
 
     if (ThrsafeExchange(&stage4CallContext->m_SOR_mi_zeroHeadTaken, 1) == 0) {
-        atomicord32 *mi_links = stage4CallContext->m_mi_links;/*=[2*(m + 1)]*/
+        std::atomic<uint32_t> *mi_links = stage4CallContext->m_mi_links;/*=[2*(m + 1)]*/
         unsigned int m = localContext->m_m;
         memset(mi_links, 0, sizeof(mi_links[0]) * (m + 1));
     }
     if (ThrsafeExchange(&stage4CallContext->m_SOR_mi_zeroTailTaken, 1) == 0) {
-        atomicord32 *mi_links = stage4CallContext->m_mi_links;/*=[2*(m + 1)]*/
+        std::atomic<uint32_t> *mi_links = stage4CallContext->m_mi_links;/*=[2*(m + 1)]*/
         unsigned int m = localContext->m_m;
         memset(mi_links + (m + 1), 0, sizeof(mi_links[0]) * (m + 1));
     }
@@ -2707,8 +2709,8 @@ void dxQuickStepIsland_Stage4LCP_DependencyMapForNewOrderRebuilding(dxQuickStepp
 {
     const dxQuickStepperLocalContext *localContext = stage4CallContext->m_localContext;
     
-    atomicord32 *bi_links = stage4CallContext->m_bi_links_or_mi_levels;/*=[nb]*/
-    atomicord32 *mi_links = stage4CallContext->m_mi_links;/*=[2*(m + 1)]*/
+    std::atomic<uint32_t> *bi_links = stage4CallContext->m_bi_links_or_mi_levels;/*=[nb]*/
+    std::atomic<uint32_t> *mi_links = stage4CallContext->m_mi_links;/*=[2*(m + 1)]*/
 
     IndexError *order = stage4CallContext->m_order;
     const dxJBodiesItem *jb = localContext->m_jb;
@@ -2753,8 +2755,8 @@ void dxQuickStepIsland_Stage4LCP_DependencyMapFromSavedLevelsReconstruction(dxQu
 {
     const dxQuickStepperLocalContext *localContext = stage4CallContext->m_localContext;
 
-    atomicord32 *mi_levels = stage4CallContext->m_bi_links_or_mi_levels;/*=[m]*/
-    atomicord32 *mi_links = stage4CallContext->m_mi_links;/*=[2*(m + 1)]*/
+    std::atomic<uint32_t> *mi_levels = stage4CallContext->m_bi_links_or_mi_levels;/*=[m]*/
+    std::atomic<uint32_t> *mi_links = stage4CallContext->m_mi_links;/*=[2*(m + 1)]*/
 
     // NOTE! 
     // OD: The mi_links array is not zero-filled before the reconstruction.
@@ -2851,8 +2853,8 @@ int dxQuickStepIsland_Stage4LCP_Iteration_Callback(void *_stage4CallContext, dca
 static 
 void dxQuickStepIsland_Stage4LCP_MTIteration(dxQuickStepperStage4CallContext *stage4CallContext, unsigned int initiallyKnownToBeCompletedLevel)
 {
-    atomicord32 *mi_levels = stage4CallContext->m_bi_links_or_mi_levels;
-    atomicord32 *mi_links = stage4CallContext->m_mi_links;
+    std::atomic<uint32_t> *mi_levels = stage4CallContext->m_bi_links_or_mi_levels;
+    std::atomic<uint32_t> *mi_links = stage4CallContext->m_mi_links;
 
     unsigned int knownToBeCompletedLevel = initiallyKnownToBeCompletedLevel;
 
@@ -3243,7 +3245,7 @@ void dxQuickStepIsland_Stage5(dxQuickStepperStage5CallContext *stage5CallContext
     const dxQuickStepperLocalContext *localContext = stage5CallContext->m_localContext;
 
     dxWorld *world = callContext->m_world;
-    volatile atomicord32 *iterationCountStorage = world->qs.GetStatisticsIterationCountStorage();
+    std::atomic<uint32_t> *iterationCountStorage = world->qs.GetStatisticsIterationCountStorage();
 #if !PRINT_DYNAMIC_ADJUSTMENT_STATS
     ThrsafeIncrementNoResult(iterationCountStorage);
 #else
@@ -3546,8 +3548,8 @@ sizeint dxEstimateQuickStepMemoryRequirements (dxBody * const *body,
                     sub3_res1 += dEFFICIENT_SIZE(sizeof(dReal) * m); // for last_lambda
 #endif
 #if !dTHREADING_INTF_DISABLED
-                    sub3_res1 += dEFFICIENT_SIZE(sizeof(atomicord32) * dMAX(nb, m)); // for bi_links_or_mi_levels
-                    sub3_res1 += dEFFICIENT_SIZE(sizeof(atomicord32) * 2 * ((sizeint)m + 1)); // for mi_links
+                    sub3_res1 += dEFFICIENT_SIZE(sizeof(std::atomic<uint32_t>) * dMAX(nb, m)); // for bi_links_or_mi_levels
+                    sub3_res1 += dEFFICIENT_SIZE(sizeof(std::atomic<uint32_t>) * 2 * ((sizeint)m + 1)); // for mi_links
 #endif
                     sub3_res1 += dEFFICIENT_SIZE(sizeof(dxQuickStepperStage4CallContext)); // for dxQuickStepperStage4CallContext;
 

@@ -25,8 +25,7 @@
  *************************************************************************/
 
 /*
- *  Fake atomics provider for built-in threading support provider.
- *  OU-based atomics provider for built-in threading support provider.
+ *  C++ standard atomics provider for built-in threading support provider.
  *
  *  The classes have been moved into a separate header as they are to be used 
  *  in both WIN and POSIX implementations.
@@ -37,194 +36,85 @@
 #define _ODE_THREADING_ATOMICS_PROVS_H_
 
 
+#include <atomic>
+#include <cstdint>
+#include <cstddef>
 #include <ode/odeconfig.h>
 #include <ode/error.h>
+#include "typedefs.h"
 
 
 /************************************************************************/
-/* Fake atomics provider class implementation                           */
+/* std::atomic based atomics provider class implementation              */
 /************************************************************************/
 
-class dxFakeAtomicsProvider
+class dxStdAtomicsProvider
 {
 public:
-    typedef unsigned long atomicord_t;
-    typedef void *atomicptr_t;
+    typedef std::atomic<uint32_t> atomicord_t;
+    typedef std::atomic<void *> atomicptr_t;
 
 public:
-    static void IncrementTargetNoRet(volatile atomicord_t *value_accumulator_ptr)
+    static void IncrementTargetNoRet(atomicord_t *value_accumulator_ptr)
     {
-        atomicord_t temp = *value_accumulator_ptr;
-        *value_accumulator_ptr = temp + 1;
+        value_accumulator_ptr->fetch_add(1);
     }
 
-    static void DecrementTargetNoRet(volatile atomicord_t *value_accumulator_ptr)
+    static void DecrementTargetNoRet(atomicord_t *value_accumulator_ptr)
     {
-        atomicord_t temp = *value_accumulator_ptr;
-        *value_accumulator_ptr = temp - 1;
+        value_accumulator_ptr->fetch_sub(1);
     }
 
-    static atomicord_t UnorderedQueryTargetValue(const volatile atomicord_t *value_storage_ptr)
+    static uint32_t UnorderedQueryTargetValue(const atomicord_t *value_storage_ptr)
     {
-        return *value_storage_ptr;
+        return value_storage_ptr->load(std::memory_order_relaxed);
     }
 
-    static atomicord_t QueryTargetValue(const volatile atomicord_t *value_storage_ptr)
+    static uint32_t QueryTargetValue(const atomicord_t *value_storage_ptr)
     {
-        return *value_storage_ptr;
+        return value_storage_ptr->load();
     }
 
     template<unsigned type_size>
-    static sizeint AddValueToTarget(volatile void *value_accumulator_ptr, diffint value_addend);
+    static sizeint AddValueToTarget(void *value_accumulator_ptr, diffint value_addend);
 
-    static bool CompareExchangeTargetValue(volatile atomicord_t *value_storage_ptr,
-        atomicord_t comparand_value, atomicord_t new_value)
+    static bool CompareExchangeTargetValue(atomicord_t *value_storage_ptr,
+        uint32_t comparand_value, uint32_t new_value)
     {
-        bool exchange_result = false;
-
-        atomicord_t original_value = *value_storage_ptr;
-
-        if (original_value == comparand_value)
-        {
-            *value_storage_ptr = new_value;
-
-            exchange_result = true;
-        }
-
-        return exchange_result;
+        return value_storage_ptr->compare_exchange_strong(comparand_value, new_value);
     }
 
-    static atomicptr_t UnorderedQueryTargetPtr(const volatile atomicptr_t *pointer_storage_ptr)
+    static void *UnorderedQueryTargetPtr(const atomicptr_t *pointer_storage_ptr)
     {
-        return *pointer_storage_ptr;
+        return pointer_storage_ptr->load(std::memory_order_relaxed);
     }
 
-    static bool CompareExchangeTargetPtr(volatile atomicptr_t *pointer_storage_ptr, 
-        atomicptr_t comparand_value, atomicptr_t new_value)
+    static bool CompareExchangeTargetPtr(atomicptr_t *pointer_storage_ptr,
+        void *comparand_value, void *new_value)
     {
-        bool exchange_result = false;
-
-        atomicptr_t original_value = *pointer_storage_ptr;
-
-        if (original_value == comparand_value)
-        {
-            *pointer_storage_ptr = new_value;
-
-            exchange_result = true;
-        }
-
-        return exchange_result;
+        return pointer_storage_ptr->compare_exchange_strong(comparand_value, new_value);
     }
 };
 
 template<>
-inline sizeint dxFakeAtomicsProvider::AddValueToTarget<sizeof(dxFakeAtomicsProvider::atomicord_t)>(volatile void *value_accumulator_ptr, diffint value_addend)
+inline sizeint dxStdAtomicsProvider::AddValueToTarget<sizeof(uint32_t)>(void *value_accumulator_ptr, diffint value_addend)
 {
-    atomicord_t original_value = *(volatile atomicord_t *)value_accumulator_ptr;
-
-    *(volatile atomicord_t *)value_accumulator_ptr = original_value + (atomicord_t)value_addend;
-
-    return original_value;
+    std::atomic<uint32_t> *ptr = static_cast<std::atomic<uint32_t> *>(value_accumulator_ptr);
+    return ptr->fetch_add(static_cast<uint32_t>(value_addend));
 }
 
 template<>
-inline sizeint dxFakeAtomicsProvider::AddValueToTarget<2 * sizeof(dxFakeAtomicsProvider::atomicord_t)>(volatile void *value_accumulator_ptr, diffint value_addend)
+inline sizeint dxStdAtomicsProvider::AddValueToTarget<2 * sizeof(uint32_t)>(void *value_accumulator_ptr, diffint value_addend)
 {
-    atomicptr_t original_value = *(volatile atomicptr_t *)value_accumulator_ptr;
-
-    *(volatile atomicptr_t *)value_accumulator_ptr = (atomicptr_t)((sizeint)original_value + (sizeint)value_addend);
-
-    return (sizeint)original_value;
+    std::atomic<sizeint> *ptr = static_cast<std::atomic<sizeint> *>(value_accumulator_ptr);
+    return ptr->fetch_add(static_cast<sizeint>(value_addend));
 }
 
+// Legacy aliases — both self-threaded and multi-threaded paths now use std::atomic
+typedef dxStdAtomicsProvider dxFakeAtomicsProvider;
 
 #if dBUILTIN_THREADING_IMPL_ENABLED
-
-/************************************************************************/
-/* dxOUAtomicsProvider class implementation                             */
-/************************************************************************/
-
-#if !dOU_ENABLED
-#error OU library must be enabled for this to compile
-#elif !dATOMICS_ENABLED
-#error OU Atomics must be enabled for this to compile
-#endif
-#include "odeou.h"
-
-class dxOUAtomicsProvider
-{
-public:
-    typedef _OU_NAMESPACE::atomicord32 atomicord_t;
-    typedef _OU_NAMESPACE::atomicptr atomicptr_t;
-
-public:
-    static void IncrementTargetNoRet(volatile atomicord_t *value_accumulator_ptr)
-    {
-        _OU_NAMESPACE::AtomicIncrementNoResult(value_accumulator_ptr);
-    }
-
-    static void DecrementTargetNoRet(volatile atomicord_t *value_accumulator_ptr)
-    {
-        _OU_NAMESPACE::AtomicDecrementNoResult(value_accumulator_ptr);
-    }
-
-    static atomicord_t UnorderedQueryTargetValue(const volatile atomicord_t *value_storage_ptr)
-    {
-        return _OU_NAMESPACE::UnorderedAtomicLoad(value_storage_ptr);
-    }
-
-    static atomicord_t QueryTargetValue(const volatile atomicord_t *value_storage_ptr)
-    {
-        return _OU_NAMESPACE::AtomicLoad(value_storage_ptr);
-    }
-
-    template<unsigned type_size>
-    static sizeint AddValueToTarget(volatile void *value_accumulator_ptr, diffint value_addend);
-
-    static bool CompareExchangeTargetValue(volatile atomicord_t *value_storage_ptr,
-        atomicord_t comparand_value, atomicord_t new_value)
-    {
-        return _OU_NAMESPACE::AtomicCompareExchange(value_storage_ptr, comparand_value, new_value);
-    }
-
-    static atomicptr_t UnorderedQueryTargetPtr(const volatile atomicptr_t *pointer_storage_ptr)
-    {
-        return _OU_NAMESPACE::UnorderedAtomicLoadPointer(pointer_storage_ptr);
-    }
-
-    static bool CompareExchangeTargetPtr(volatile atomicptr_t *pointer_storage_ptr, 
-        atomicptr_t comparand_value, atomicptr_t new_value)
-    {
-        return _OU_NAMESPACE::AtomicCompareExchangePointer(pointer_storage_ptr, comparand_value, new_value);
-    }
-};
-
-template<>
-inline sizeint dxOUAtomicsProvider::AddValueToTarget<sizeof(dxOUAtomicsProvider::atomicord_t)>(volatile void *value_accumulator_ptr, diffint value_addend)
-{
-    return _OU_NAMESPACE::AtomicExchangeAdd((volatile atomicord_t *)value_accumulator_ptr, (atomicord_t)value_addend);
-}
-
-template<>
-inline sizeint dxOUAtomicsProvider::AddValueToTarget<2 * sizeof(dxOUAtomicsProvider::atomicord_t)>(volatile void *value_accumulator_ptr, diffint value_addend)
-{
-    atomicptr_t original_value;
-
-    while (true)
-    {
-        original_value = *(volatile atomicptr_t *)value_accumulator_ptr;
-
-        atomicptr_t new_value = (atomicptr_t)((sizeint)original_value + (sizeint)value_addend);
-        if (_OU_NAMESPACE::AtomicCompareExchangePointer((volatile atomicptr_t *)value_accumulator_ptr, original_value, new_value))
-        {
-            break;
-        }
-    }
-
-    return (sizeint)original_value;
-}
-
-
+typedef dxStdAtomicsProvider dxOUAtomicsProvider;
 #endif // #if dBUILTIN_THREADING_IMPL_ENABLED
 
 

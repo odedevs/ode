@@ -462,17 +462,17 @@ sizeint ThreadedEquationSolverLDLT::estimateCooperativelySolvingL1StraightMemory
 template<unsigned int block_step>
 /*static */
 void ThreadedEquationSolverLDLT::initializeCooperativelySolveL1StraightMemoryStructures(unsigned rowCount, 
-    atomicord32 &out_blockCompletionProgress, cellindexint *blockProgressDescriptors, SolveL1StraightCellContext *dUNUSED(cellContexts))
+    std::atomic<uint32_t> &out_blockCompletionProgress, std::atomic<cellindexint> *blockProgressDescriptors, SolveL1StraightCellContext *dUNUSED(cellContexts))
 {
     unsigned blockCount = deriveSolvingL1StraightBlockCount(rowCount, block_step);
 
-    out_blockCompletionProgress = 0;
+    out_blockCompletionProgress.store(0);
     memset(blockProgressDescriptors, 0, blockCount * sizeof(*blockProgressDescriptors));
 }
 
 template<unsigned int block_step, unsigned int b_stride>
 void ThreadedEquationSolverLDLT::participateSolvingL1Straight(const dReal *L, dReal *B, unsigned rowCount, unsigned rowSkip, 
-    volatile atomicord32 &refBlockCompletionProgress/*=0*/, volatile cellindexint *blockProgressDescriptors/*=[blockCount]*/, 
+    std::atomic<uint32_t> &refBlockCompletionProgress/*=0*/, std::atomic<cellindexint> *blockProgressDescriptors/*=[blockCount]*/, 
     SolveL1StraightCellContext *cellContexts/*=[CCI__MAX x blockCount] + [blockCount]*/, unsigned ownThreadIndex)
 {
     const unsigned lookaheadRange = 32;
@@ -482,7 +482,7 @@ void ThreadedEquationSolverLDLT::participateSolvingL1Straight(const dReal *L, dR
 
     BlockProcessingState blockProcessingState = BPS_NO_BLOCKS_PROCESSED;
 
-    unsigned completedBlocks = refBlockCompletionProgress;
+    unsigned completedBlocks = refBlockCompletionProgress.load();
     unsigned currentBlock = completedBlocks;
     dIASSERT(completedBlocks <= blockCount);
 
@@ -520,7 +520,7 @@ void ThreadedEquationSolverLDLT::participateSolvingL1Straight(const dReal *L, dR
             CooperativeAtomics::AtomicReadReorderBarrier();
             // It is necessary to read up to date completedBblocks value after the descriptor retrieval
             // as otherwise the logic below breaks
-            completedBlocks = refBlockCompletionProgress;
+            completedBlocks = refBlockCompletionProgress.load();
 
             if (!GET_CELLDESCRIPTOR_ISLOCKED(testDescriptor))
             {
@@ -833,7 +833,7 @@ void ThreadedEquationSolverLDLT::participateSolvingL1Straight(const dReal *L, dR
                                 }
 
                                 // Take a look if anymore columns have been completed...
-                                completedBlocks = refBlockCompletionProgress;
+                                completedBlocks = refBlockCompletionProgress.load();
                                 dIASSERT(completedBlocks >= finalColumnBlock);
 
                                 if (completedBlocks == finalColumnBlock)
@@ -991,7 +991,7 @@ void ThreadedEquationSolverLDLT::participateSolvingL1Straight(const dReal *L, dR
                             }
 
                             // Take a look if anymore columns have been completed...
-                            completedBlocks = refBlockCompletionProgress;
+                            completedBlocks = refBlockCompletionProgress.load();
                             dIASSERT(completedBlocks >= finalColumnBlock);
 
                             if (completedBlocks == finalColumnBlock)
@@ -1539,7 +1539,7 @@ void ThreadedEquationSolverLDLT::participateSolvingL1Straight(const dReal *L, dR
                 }
 
                 ThrsafeIncrementIntUpToLimit(&refBlockCompletionProgress, currentBlock + 1);
-                dIASSERT(refBlockCompletionProgress >= currentBlock + 1);
+                dIASSERT(refBlockCompletionProgress.load() >= currentBlock + 1);
 
                 // And assign the completed status no matter what
                 CooperativeAtomics::AtomicStoreCellindexint(&blockProgressDescriptors[currentBlock], INVALID_CELLDESCRIPTOR);
@@ -1552,7 +1552,7 @@ void ThreadedEquationSolverLDLT::participateSolvingL1Straight(const dReal *L, dR
 
         if (!stayWithinTheBlock)
         {
-            completedBlocks = refBlockCompletionProgress;
+            completedBlocks = refBlockCompletionProgress.load();
 
             if (completedBlocks == blockCount)
             {

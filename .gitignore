@@ -35,7 +35,6 @@ test-driver
 /include/ode/precision.h
 /include/ode/version.h
 /libccd/src/ccd/precision.h
-/ou/test/outest
 /tests/tests/
 /tests/tests.log
 /tests/tests.trs

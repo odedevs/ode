@@ -26,7 +26,6 @@
 #include "common.h"
 #include "amotor.h"
 #include "joint_internal.h"
-#include "odeou.h"
 
 
 /*extern */
@@ -202,16 +201,11 @@ void dJointAddAMotorTorques(dJointID j, dReal torque1, dReal torque2, dReal torq
 
 //****************************************************************************
 
-BEGIN_NAMESPACE_OU();
-template<>
-const dJointBodyRelativity CEnumUnsortedElementArray<dSpaceAxis, dSA__MAX, dJointBodyRelativity, 0x160703D5>::m_aetElementArray[] =
-{
+static const CEnumUnsortedElementArray<dSpaceAxis, dSA__MAX, dJointBodyRelativity> g_abrEulerAxisAllowedBodyRelativities = {{
     dJBR_BODY1, // dSA_X,
     dJBR_GLOBAL, // dSA_Y,
     dJBR_BODY2, // dSA_Z,
-};
-END_NAMESPACE_OU();
-static const CEnumUnsortedElementArray<dSpaceAxis, dSA__MAX, dJointBodyRelativity, 0x160703D5> g_abrEulerAxisAllowedBodyRelativities;
+}};
 
 static inline 
 dSpaceAxis EncodeJointConnectedBodyEulerAxis(dJointConnectedBody cbBodyIndex)

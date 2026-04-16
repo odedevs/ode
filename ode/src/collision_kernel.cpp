@@ -39,7 +39,8 @@ for geometry objects
 #include "collision_transform.h"
 #include "collision_trimesh_internal.h"
 #include "collision_space_internal.h"
-#include "odeou.h"
+#include <atomic>
+#include <cstdint>
 
 #ifdef dLIBCCD_ENABLED
 # include "collision_libccd.h"
@@ -55,19 +56,15 @@ for geometry objects
 
 // this struct records the parameters passed to dCollideSpaceGeom()
 
-#if dATOMICS_ENABLED 
-static volatile atomicptr s_cachedPosR = 0; // dxPosR *
-#endif // dATOMICS_ENABLED
+static std::atomic<void*> s_cachedPosR{nullptr}; // dxPosR *
 
 static inline dxPosR* dAllocPosr()
 {
     dxPosR *retPosR;
 
-#if dATOMICS_ENABLED
-    retPosR = (dxPosR *)AtomicExchangePointer(&s_cachedPosR, NULL);
+    retPosR = (dxPosR *)s_cachedPosR.exchange(nullptr);
 
     if (!retPosR)
-#endif
     {
         retPosR = (dxPosR*) dAlloc (sizeof(dxPosR));
     }
@@ -77,9 +74,8 @@ static inline dxPosR* dAllocPosr()
 
 static inline void dFreePosr(dxPosR *oldPosR)
 {
-#if dATOMICS_ENABLED
-    if (!AtomicCompareExchangePointer(&s_cachedPosR, NULL, (atomicptr)oldPosR))
-#endif
+    void *expected = nullptr;
+    if (!s_cachedPosR.compare_exchange_strong(expected, (void *)oldPosR))
     {
         dFree(oldPosR, sizeof(dxPosR));
     }
@@ -87,18 +83,16 @@ static inline void dFreePosr(dxPosR *oldPosR)
 
 /*extern */void dClearPosrCache(void)
 {
-#if dATOMICS_ENABLED
     // No threads should be accessing ODE at this time already,
     // hence variable may be read directly.
-    dxPosR *existingPosR = (dxPosR *)s_cachedPosR;
+    dxPosR *existingPosR = (dxPosR *)s_cachedPosR.load(std::memory_order_relaxed);
 
     if (existingPosR)
     {
         dFree(existingPosR, sizeof(dxPosR));
 
-        s_cachedPosR = 0;
+        s_cachedPosR.store(nullptr, std::memory_order_relaxed);
     }
-#endif
 }
 
 struct SpaceGeomColliderData {

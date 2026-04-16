@@ -53,7 +53,7 @@ const char *const dxWorldProcessContext::m_aszContextMutexNames[dxPCM__MAX] =
 
 dxWorldProcessContext::dxWorldProcessContext():
     m_pmaIslandsArena(NULL),
-    m_pmaStepperArenas(NULL),
+    m_pmaStepperArenas(nullptr),
     m_pswObjectsAllocWorld(NULL),
     m_pmgStepperMutexGroup(NULL),
     m_pcwIslandsSteppingWait(NULL)
@@ -72,7 +72,7 @@ dxWorldProcessContext::~dxWorldProcessContext()
         // m_pswObjectsAllocWorld->FreeThreadedCallWait(m_pcwIslandsSteppingWait); -- The stock call wait can not be freed
     }
 
-    dxWorldProcessMemArena *pmaStepperArenas = m_pmaStepperArenas;
+    dxWorldProcessMemArena *pmaStepperArenas = m_pmaStepperArenas.load();
     if (pmaStepperArenas != NULL)
     {
         FreeArenasList(pmaStepperArenas);
@@ -301,18 +301,19 @@ void dxWorldProcessContext::FreeArenasList(dxWorldProcessMemArena *pmaExistingAr
 
 dxWorldProcessMemArena *dxWorldProcessContext::GetStepperArenasHead() const
 {
-    return m_pmaStepperArenas;
+    return m_pmaStepperArenas.load();
 }
 
 bool dxWorldProcessContext::TryExtractingStepperArenasHead(dxWorldProcessMemArena *pmaHeadInstance)
 {
     dxWorldProcessMemArena *pmaNextInstance = pmaHeadInstance->GetNextMemArena();
-    return ThrsafeCompareExchangePointer((volatile atomicptr *)&m_pmaStepperArenas, (atomicptr)pmaHeadInstance, (atomicptr)pmaNextInstance);
+    dxWorldProcessMemArena *expected = pmaHeadInstance;
+    return m_pmaStepperArenas.compare_exchange_strong(expected, pmaNextInstance);
 }
 
 bool dxWorldProcessContext::TryInsertingStepperArenasHead(dxWorldProcessMemArena *pmaArenaInstance, dxWorldProcessMemArena *pmaExistingHead)
 {
-    return ThrsafeCompareExchangePointer((volatile atomicptr *)&m_pmaStepperArenas, (atomicptr)pmaExistingHead, (atomicptr)pmaArenaInstance);
+    return m_pmaStepperArenas.compare_exchange_strong(pmaExistingHead, pmaArenaInstance);
 }
 
 
@@ -373,7 +374,7 @@ struct dxIslandsProcessingCallContext
     dReal                           const m_stepSize;
     dstepper_fn_t                   const m_stepper;
     dCallReleaseeID                 m_groupReleasee;
-    volatile sizeint                m_islandToProcessStorage;
+    std::atomic<sizeint>             m_islandToProcessStorage;
     unsigned                        m_stepperAllowedThreads;
     unsigned                        m_lcpAllowedThreads;
 };
