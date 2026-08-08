@@ -156,8 +156,8 @@ void ThreadedEquationSolverLDLT::doCooperativelyFactorLDLTValidated(
     dIASSERT(bufferAllocated != NULL);
     dIASSERT(dALIGN_PTR(bufferAllocated, ALLOCATION_DEFAULT_ALIGNMENT) == bufferAllocated);
 
-    atomicord32 solvingBlockCompletionProgress;
-    cellindexint *solvingBlockProgressDescriptors;
+    std::atomic<uint32_t> solvingBlockCompletionProgress{0};
+    std::atomic<cellindexint> *solvingBlockProgressDescriptors;
     FactorizationSolveL1StripeCellContext *solvingCellContexts;
 
     FactorizationFactorizeL1StripeContext *factorizingFactorizationContext;
@@ -307,8 +307,8 @@ void ThreadedEquationSolverLDLT::factotLDLT_scalingAndFactorizingCompleteSync(Fa
     unsigned blockIndex = ref_workerContext.m_solvingBlockIndex;
     dIASSERT(blockIndex < ref_workerContext.m_totalBlockCount);
 
-    atomicord32 &refSolvingBlockCompletionProgress = ref_workerContext.m_refSolvingBlockCompletionProgress;
-    cellindexint *solvingBlockProgressDescriptors = ref_workerContext.m_solvingBlockProgressDescriptors;
+    std::atomic<uint32_t> &refSolvingBlockCompletionProgress = ref_workerContext.m_refSolvingBlockCompletionProgress;
+    std::atomic<cellindexint> *solvingBlockProgressDescriptors = ref_workerContext.m_solvingBlockProgressDescriptors;
     FactorizationSolveL1StripeCellContext *solvingCellContexts = ref_workerContext.m_solvingCellContexts;
 
     initializeCooperativelySolvingL1Stripe_XMemoryStructures(blockIndex, refSolvingBlockCompletionProgress, solvingBlockProgressDescriptors, solvingCellContexts);

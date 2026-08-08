@@ -33,6 +33,8 @@
 #include "util.h"
 #include "threadingutils.h"
 
+#include <atomic>
+#include <cstdint>
 #include <new>
 
 
@@ -238,9 +240,9 @@ struct dxStepperStage0BodiesCallContext
 
     const dxStepperProcessingCallContext *m_stepperCallContext;
     dReal                           *m_invI;
-    atomicord32                     m_tagsTaken;
-    atomicord32                     m_gravityTaken;
-    volatile atomicord32            m_inertiaBodyIndex;
+    std::atomic<uint32_t>           m_tagsTaken;
+    std::atomic<uint32_t>           m_gravityTaken;
+    std::atomic<uint32_t>           m_inertiaBodyIndex;
 };
 
 struct dxStepperStage0JointsCallContext
@@ -271,7 +273,7 @@ struct dxStepperLocalContext
     void Initialize(dReal *invI, dJointWithInfo1 *jointinfos, unsigned int nj, 
         unsigned int m, unsigned int nub, const unsigned int *mindex, int *findex, 
         dReal *J, dReal *A, dReal *pairsRhsCfm, dReal *pairsLoHi, 
-        atomicord32 *bodyStartJoints, atomicord32 *bodyJointLinks)
+        std::atomic<uint32_t> *bodyStartJoints, std::atomic<uint32_t> *bodyJointLinks)
     {
         m_invI = invI;
         m_jointinfos = jointinfos;
@@ -299,8 +301,8 @@ struct dxStepperLocalContext
     dReal                           *m_A;
     dReal                           *m_pairsRhsCfm;
     dReal                           *m_pairsLoHi;
-    atomicord32                     *m_bodyStartJoints;
-    atomicord32                     *m_bodyJointLinks;
+    std::atomic<uint32_t>           *m_bodyStartJoints;
+    std::atomic<uint32_t>           *m_bodyJointLinks;
 };
 
 struct dxStepperStage2CallContext
@@ -324,12 +326,12 @@ struct dxStepperStage2CallContext
     const dxStepperLocalContext     *m_localContext;
     dReal                           *m_JinvM;
     dReal                           *m_rhs_tmp;
-    volatile atomicord32            m_ji_J;
-    volatile atomicord32            m_ji_Ainit;
-    volatile atomicord32            m_ji_JinvM;
-    volatile atomicord32            m_ji_Aaddjb;
-    volatile atomicord32            m_bi_rhs_tmp;
-    volatile atomicord32            m_ji_rhs;
+    std::atomic<uint32_t>           m_ji_J;
+    std::atomic<uint32_t>           m_ji_Ainit;
+    std::atomic<uint32_t>           m_ji_JinvM;
+    std::atomic<uint32_t>           m_ji_Aaddjb;
+    std::atomic<uint32_t>           m_bi_rhs_tmp;
+    std::atomic<uint32_t>           m_ji_rhs;
 };
 
 struct dxStepperStage3CallContext
@@ -361,7 +363,7 @@ struct dxStepperStage4CallContext
     const dxStepperProcessingCallContext *m_stepperCallContext;
     const dxStepperLocalContext     *m_localContext;
     // void                            *m_stage3MemarenaState;
-    volatile atomicord32            m_bi_constrForce;
+    std::atomic<uint32_t>           m_bi_constrForce;
 };
 
 static int dxStepIsland_Stage2a_Callback(void *callContext, dcallindex_t callInstanceIndex, dCallReleaseeID callThisReleasee);
@@ -917,7 +919,7 @@ void dxStepIsland_Stage1(dxStepperStage1CallContext *stage1CallContext)
     unsigned int *mindex = NULL;
     dReal *J = NULL, *A = NULL, *pairsRhsCfm = NULL, *pairsLoHi = NULL;
     int *findex = NULL;
-    atomicord32 *bodyStartJoints = NULL, *bodyJointLinks = NULL;
+    std::atomic<uint32_t> *bodyStartJoints = NULL, *bodyJointLinks = NULL;
 
     // if there are constraints, compute constrForce
     if (m > 0) {
@@ -946,9 +948,9 @@ void dxStepIsland_Stage1(dxStepperStage1CallContext *stage1CallContext)
         pairsRhsCfm = memarena->AllocateArray<dReal>((sizeint)m * RCE__RHS_CFM_MAX);
         pairsLoHi = memarena->AllocateArray<dReal>((sizeint)m * LHE__LO_HI_MAX);
         const unsigned int nb = callContext->m_islandBodiesCount;
-        bodyStartJoints = memarena->AllocateArray<atomicord32>(nb);
-        bodyJointLinks = memarena->AllocateArray<atomicord32>((sizeint)nj * dJCB__MAX);
-        dICHECK(nj < ~((atomicord32)0) / dJCB__MAX); // If larger joint counts are to be used, pointers (or sizeint) need to be stored rather than atomicord32 indices
+        bodyStartJoints = memarena->AllocateArray<std::atomic<uint32_t>>(nb);
+        bodyJointLinks = memarena->AllocateArray<std::atomic<uint32_t>>((sizeint)nj * dJCB__MAX);
+        dICHECK(nj < ~((uint32_t)0) / dJCB__MAX); // If larger joint counts are to be used, pointers (or sizeint) need to be stored rather than uint32_t indices
     }
 
     dxStepperLocalContext *localContext = (dxStepperLocalContext *)memarena->AllocateBlock(sizeof(dxStepperLocalContext));
@@ -1230,7 +1232,7 @@ void dxStepIsland_Stage2b(dxStepperStage2CallContext *stage2CallContext)
         dxBody * const *const body = callContext->m_islandBodiesStart;
         const unsigned int nb = callContext->m_islandBodiesCount;
         const dReal *invI = localContext->m_invI;
-        atomicord32 *bodyStartJoints = localContext->m_bodyStartJoints;
+        std::atomic<uint32_t> *bodyStartJoints = localContext->m_bodyStartJoints;
         dReal *rhs_tmp = stage2CallContext->m_rhs_tmp;
 
         // compute the right hand side `rhs'
@@ -1372,8 +1374,8 @@ void dxStepIsland_Stage2c(dxStepperStage2CallContext *stage2CallContext)
         const dReal *J = localContext->m_J;
         const dReal *rhs_tmp = stage2CallContext->m_rhs_tmp;
         dReal *pairsRhsCfm = localContext->m_pairsRhsCfm;
-        atomicord32 *bodyStartJoints = localContext->m_bodyStartJoints;
-        atomicord32 *bodyJointLinks = localContext->m_bodyJointLinks;
+        std::atomic<uint32_t> *bodyStartJoints = localContext->m_bodyStartJoints;
+        std::atomic<uint32_t> *bodyJointLinks = localContext->m_bodyJointLinks;
 
         // compute the right hand side `rhs'
         // put J*rhs_tmp into rhs
@@ -1393,9 +1395,9 @@ void dxStepIsland_Stage2c(dxStepperStage2CallContext *stage2CallContext)
                 MultiplySubJxRhsTmpFromRHS (currRhsCfm, JRow, rhs_tmp + (sizeint)bodyIndex * dDA__MAX, infom);
 
                 // Link joints connected to each body into a list to be used on results incorporation. The bodyStartJoints have been initialized in dxStepIsland_Stage2b.
-                const atomicord32 linkIndex = (atomicord32)((sizeint)ji * dJCB__MAX + dJCB_FIRST_BODY); // It is asserted at links buffer allocation that the indices can't overflow atomicord32
-                for (atomicord32 oldStartIndex = bodyStartJoints[bodyIndex]; ; oldStartIndex = bodyStartJoints[bodyIndex]) {
-                    bodyJointLinks[linkIndex] = oldStartIndex;
+                const uint32_t linkIndex = (uint32_t)((sizeint)ji * dJCB__MAX + dJCB_FIRST_BODY); // It is asserted at links buffer allocation that the indices can't overflow uint32_t
+                for (uint32_t oldStartIndex = bodyStartJoints[bodyIndex].load(); ; oldStartIndex = bodyStartJoints[bodyIndex].load()) {
+                    bodyJointLinks[linkIndex].store(oldStartIndex);
                     if (ThrsafeCompareExchange(&bodyStartJoints[bodyIndex], oldStartIndex, linkIndex + 1)) { // The link index is stored incremented to allow 0 as end indicator
                         break;
                     }
@@ -1408,9 +1410,9 @@ void dxStepIsland_Stage2c(dxStepperStage2CallContext *stage2CallContext)
                 MultiplySubJxRhsTmpFromRHS (currRhsCfm, JRow + infom * JME__MAX, rhs_tmp + (sizeint)bodyIndex * dDA__MAX, infom);
 
                 // Link joints connected to each body into a list to be used on results incorporation. The bodyStartJoints have been initialized in dxStepIsland_Stage2b
-                const atomicord32 linkIndex = (atomicord32)((sizeint)ji * dJCB__MAX + dJCB_SECOND_BODY); // It is asserted at links buffer allocation that the indices can't overflow atomicord32
-                for (atomicord32 oldStartIndex = bodyStartJoints[bodyIndex]; ; oldStartIndex = bodyStartJoints[bodyIndex]) {
-                    bodyJointLinks[linkIndex] = oldStartIndex;
+                const uint32_t linkIndex = (uint32_t)((sizeint)ji * dJCB__MAX + dJCB_SECOND_BODY); // It is asserted at links buffer allocation that the indices can't overflow uint32_t
+                for (uint32_t oldStartIndex = bodyStartJoints[bodyIndex].load(); ; oldStartIndex = bodyStartJoints[bodyIndex].load()) {
+                    bodyJointLinks[linkIndex].store(oldStartIndex);
                     if (ThrsafeCompareExchange(&bodyStartJoints[bodyIndex], oldStartIndex, linkIndex + 1)) { // The link index is stored incremented to allow 0 as end indicator
                         break;
                     }
@@ -1513,8 +1515,8 @@ void dxStepIsland_Stage4(dxStepperStage4CallContext *stage4CallContext)
     dReal *J = localContext->m_J;
     dReal *pairsRhsLambda = localContext->m_pairsRhsCfm;
     const unsigned int *mIndex = localContext->m_mindex;
-    atomicord32 *bodyStartJoints = localContext->m_bodyStartJoints;
-    atomicord32 *bodyJointLinks = localContext->m_bodyJointLinks;
+    std::atomic<uint32_t> *bodyStartJoints = localContext->m_bodyStartJoints;
+    std::atomic<uint32_t> *bodyJointLinks = localContext->m_bodyJointLinks;
     const unsigned int nb = callContext->m_islandBodiesCount;
 
     unsigned bi;
@@ -1527,13 +1529,13 @@ void dxStepIsland_Stage4(dxStepperStage4CallContext *stage4CallContext)
         dReal bodyConstrForce[CFE__MAX];
         bool constrForceAvailable = false;
         
-        unsigned linkIndex = bodyStartJoints != NULL ? bodyStartJoints[bi] : 0;
+        unsigned linkIndex = bodyStartJoints != NULL ? bodyStartJoints[bi].load() : 0;
         if (linkIndex != 0) {
             dSetZero(bodyConstrForce, dARRAY_SIZE(bodyConstrForce));
         }
 
         // compute the constraint force as constrForce = J'*lambda
-        for (; linkIndex != 0; constrForceAvailable = true, linkIndex = bodyJointLinks[linkIndex - 1]) {
+        for (; linkIndex != 0; constrForceAvailable = true, linkIndex = bodyJointLinks[linkIndex - 1].load()) {
             unsigned jointIndex = (linkIndex - 1) / dJCB__MAX;
             unsigned jointBodyIndex = (linkIndex - 1) % dJCB__MAX;
 
@@ -1628,8 +1630,8 @@ sizeint dxEstimateStepMemoryRequirements (dxBody * const *body, unsigned int nb,
             sub1_res2 += dOVERALIGNED_SIZE(sizeof(dReal) * mskip * m, AMATRIX_ALIGNMENT); // for A
             sub1_res2 += dEFFICIENT_SIZE(sizeof(dReal) * RCE__RHS_CFM_MAX * m); // for pairsRhsCfm
             sub1_res2 += dEFFICIENT_SIZE(sizeof(dReal) * LHE__LO_HI_MAX * m); // for pairsLoHi
-            sub1_res2 += dEFFICIENT_SIZE(sizeof(atomicord32) * nb); // for bodyStartJoints
-            sub1_res2 += dEFFICIENT_SIZE(sizeof(atomicord32)* dJCB__MAX * nj); // for bodyJointLinks
+            sub1_res2 += dEFFICIENT_SIZE(sizeof(std::atomic<uint32_t>) * nb); // for bodyStartJoints
+            sub1_res2 += dEFFICIENT_SIZE(sizeof(std::atomic<uint32_t>)* dJCB__MAX * nj); // for bodyJointLinks
         }
 
         {

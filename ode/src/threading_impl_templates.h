@@ -34,6 +34,8 @@
 #define _ODE_THREADING_IMPL_TEMPLATES_H_
 
 
+#include <atomic>
+#include <cstdint>
 #include <ode/common.h>
 #include <ode/memory.h>
 
@@ -127,7 +129,7 @@ class dxtemplateThreadedLull
 {
 public:
     dxtemplateThreadedLull(): m_registrant_count(0), m_alarm_wakeup() {}
-    ~dxtemplateThreadedLull() { dIASSERT(m_registrant_count == 0); DoFinalizeObject(); }
+    ~dxtemplateThreadedLull() { dIASSERT(m_registrant_count.load() == 0); DoFinalizeObject(); }
 
     bool InitializeObject() { return DoInitializeObject(); }
 
@@ -140,12 +142,12 @@ private:
 
 public:
     void RegisterToLull() { tAtomicsProvider::IncrementTargetNoRet(&m_registrant_count); }
-    void WaitForLullAlarm() { dIASSERT(m_registrant_count != 0); m_alarm_wakeup.WaitWakeup(NULL); }
+    void WaitForLullAlarm() { dIASSERT(m_registrant_count.load() != 0); m_alarm_wakeup.WaitWakeup(NULL); }
     void UnregisterFromLull() { tAtomicsProvider::DecrementTargetNoRet(&m_registrant_count); }
 
     void SignalLullAlarmIfAnyRegistrants()
     {
-        if (tatomic_test_required ? (tAtomicsProvider::QueryTargetValue(&m_registrant_count) != 0) : (m_registrant_count != 0))
+        if (tatomic_test_required ? (tAtomicsProvider::QueryTargetValue(&m_registrant_count) != 0) : (m_registrant_count.load() != 0))
         {
             m_alarm_wakeup.WakeupAThread();
         }
@@ -222,9 +224,9 @@ class dxtemplateJobListContainer
 {
 public:
     dxtemplateJobListContainer():
-        m_ready_jobs(NULL),
+        m_ready_jobs(nullptr),
         m_job_list(NULL),
-        m_info_pool((atomicptr_t)NULL),
+        m_info_pool(nullptr),
         m_pool_access_lock(),
         m_list_access_lock(),
         m_info_wait_lull(),
@@ -235,7 +237,7 @@ public:
     ~dxtemplateJobListContainer()
     {
         dIASSERT(m_job_list == NULL); // Would not it be nice to wait for jobs to complete before deleting the list?
-        dIASSERT(m_ready_jobs == NULL);
+        dIASSERT(m_ready_jobs.load() == nullptr);
 
         FreeJobInfoPoolInfos();
         DoFinalizeObject();
@@ -295,9 +297,9 @@ public:
     bool IsJobListReadyForShutdown() const { return /*m_ready_jobs == NULL && -- not needed*/m_job_list == NULL; }
 
 private:
-    volatile atomicptr_t    m_ready_jobs;
+    atomicptr_t             m_ready_jobs;
     dxThreadedJobInfo       *m_job_list;
-    volatile atomicptr_t    m_info_pool; // dxThreadedJobInfo *
+    atomicptr_t             m_info_pool; // dxThreadedJobInfo *
     tThreadMutex            m_pool_access_lock;
     tThreadMutex            m_list_access_lock;
     tThreadLull             m_info_wait_lull;
@@ -325,7 +327,7 @@ public:
 
     ~dxtemplateJobListThreadedHandler()
     {
-        dIASSERT(m_active_thread_count == 0);
+        dIASSERT(m_active_thread_count.load() == 0);
         // dIASSERT(m_idle_thread_count == 0); -- wrong
 
         DoFinalizeObject();
@@ -371,15 +373,15 @@ private:
     
     void RegisterForWakeupSignal(bool &out_wakeup_is_needed);
 
-    atomicord_t GetActiveThreadCount() const { return m_active_thread_count; }
+    uint32_t GetActiveThreadCount() const { return m_active_thread_count.load(); }
     void RegisterAsActiveThread() { dxAtomicsProvider::IncrementTargetNoRet(&m_active_thread_count); }
     void UnregisterAsActiveThread() { dxAtomicsProvider::DecrementTargetNoRet(&m_active_thread_count); }
 
 private:
     tJobListContainer       *m_job_list_ptr;
     tThreadWakeup           m_processing_wakeup;
-    volatile atomicord_t    m_idle_thread_count;
-    volatile atomicord_t    m_active_thread_count;
+    atomicord_t             m_idle_thread_count;
+    atomicord_t             m_active_thread_count;
     int                     m_shutdown_requested;
 };
 
@@ -817,7 +819,7 @@ template<class tThreadLull, class tThreadMutex, class tAtomicsProvider>
 ddependencycount_t dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::SmartAddJobDependenciesCount(
     dxThreadedJobInfo *job_instance, ddependencychange_t dependencies_count_change)
 {
-    ddependencycount_t new_dependencies_count = tAtomicsProvider::template AddValueToTarget<sizeof(ddependencycount_t)>((volatile void *)&job_instance->m_dependencies_count, dependencies_count_change) + dependencies_count_change;
+    ddependencycount_t new_dependencies_count = tAtomicsProvider::template AddValueToTarget<sizeof(ddependencycount_t)>((void *)&job_instance->m_dependencies_count, dependencies_count_change) + dependencies_count_change;
     return new_dependencies_count;
 }
 
@@ -862,7 +864,7 @@ dxThreadedJobInfo *dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomic
 
     while (true)
     {
-        dxThreadedJobInfo *raw_head_info = (dxThreadedJobInfo *)m_info_pool;
+        dxThreadedJobInfo *raw_head_info = (dxThreadedJobInfo *)m_info_pool.load(std::memory_order_relaxed);
 
         if (raw_head_info == NULL)
         {
@@ -881,12 +883,12 @@ dxThreadedJobInfo *dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomic
         // use it and then reinsert back with a different "next"
         dxMutexLockHelper pool_access(m_pool_access_lock);
 
-        dxThreadedJobInfo *head_info = (dxThreadedJobInfo *)m_info_pool; // Head info must be re-read after mutex had been locked
+        dxThreadedJobInfo *head_info = (dxThreadedJobInfo *)m_info_pool.load(); // Head info must be re-read after mutex had been locked
 
         if (head_info != NULL)
         {
             dxThreadedJobInfo *next_info = head_info->m_next_job;
-            if (tAtomicsProvider::CompareExchangeTargetPtr(&m_info_pool, (atomicptr_t)head_info, (atomicptr_t)next_info))
+            if (tAtomicsProvider::CompareExchangeTargetPtr(&m_info_pool, (void *)head_info, (void *)next_info))
             {
                 result_info = head_info;
                 break;
@@ -912,10 +914,10 @@ void dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::Re
 {
     while (true)
     {
-        dxThreadedJobInfo *next_info = (dxThreadedJobInfo *)m_info_pool;
+        dxThreadedJobInfo *next_info = (dxThreadedJobInfo *)m_info_pool.load(std::memory_order_relaxed);
         job_instance->m_next_job = next_info;
 
-        if (tAtomicsProvider::CompareExchangeTargetPtr(&m_info_pool, (atomicptr_t)next_info, (atomicptr_t)job_instance))
+        if (tAtomicsProvider::CompareExchangeTargetPtr(&m_info_pool, (void *)next_info, (void *)job_instance))
         {
             break;
         }
@@ -927,7 +929,7 @@ void dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::Re
 template<class tThreadLull, class tThreadMutex, class tAtomicsProvider>
 void dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::FreeJobInfoPoolInfos()
 {
-    dxThreadedJobInfo *current_info = (dxThreadedJobInfo *)m_info_pool;
+    dxThreadedJobInfo *current_info = (dxThreadedJobInfo *)m_info_pool.load();
 
     while (current_info != NULL)
     {
@@ -937,7 +939,7 @@ void dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::Fr
         delete info_save;
     }
 
-    m_info_pool = (atomicptr_t)NULL;
+    m_info_pool.store(nullptr);
 }
 
 template<class tThreadLull, class tThreadMutex, class tAtomicsProvider>
@@ -955,7 +957,7 @@ bool dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::Do
 
     bool allocation_failure = false;
 
-    dxThreadedJobInfo *info_pool = (dxThreadedJobInfo *)m_info_pool;
+    dxThreadedJobInfo *info_pool = (dxThreadedJobInfo *)m_info_pool.load();
 
     ddependencycount_t info_index = 0;
     for (dxThreadedJobInfo **current_info_ptr = &info_pool; ; )
@@ -985,9 +987,9 @@ bool dxtemplateJobListContainer<tThreadLull, tThreadMutex, tAtomicsProvider>::Do
     }
 
     // Make sure m_info_pool was not changed
-    dIASSERT(m_info_pool == NULL || m_info_pool == (atomicptr_t)info_pool);
+    dIASSERT(m_info_pool.load() == nullptr || m_info_pool.load() == (void *)info_pool);
 
-    m_info_pool = (atomicptr_t)info_pool;
+    m_info_pool.store((void *)info_pool);
 
     bool result = !allocation_failure;
     return result;
@@ -1130,7 +1132,7 @@ void dxtemplateJobListThreadedHandler<tThreadWakeup, tJobListContainer>::Shutdow
 template<class tThreadWakeup, class tJobListContainer>
 void dxtemplateJobListThreadedHandler<tThreadWakeup, tJobListContainer>::CleanupForRestart()
 {
-    m_idle_thread_count = 0;
+    m_idle_thread_count.store(0);
     m_shutdown_requested = false;
     m_processing_wakeup.ResetWakeup();
 }
@@ -1142,12 +1144,12 @@ bool dxtemplateJobListThreadedHandler<tThreadWakeup, tJobListContainer>::Unregis
     bool result = false;
 
     const unsigned wakeup_signal_bit = dxThreadingTraits::wakeup_signal_bit();
-    for (atomicord_t idle_thread_count = dxAtomicsProvider::UnorderedQueryTargetValue(&m_idle_thread_count);
+    for (uint32_t idle_thread_count = dxAtomicsProvider::UnorderedQueryTargetValue(&m_idle_thread_count);
         idle_thread_count >= wakeup_signal_bit; idle_thread_count = dxAtomicsProvider::UnorderedQueryTargetValue(&m_idle_thread_count))
     {
         dIASSERT(idle_thread_count > wakeup_signal_bit);
 
-        atomicord_t new_idle_threads = idle_thread_count - wakeup_signal_bit - 1;
+        uint32_t new_idle_threads = idle_thread_count - wakeup_signal_bit - 1;
         if (dxAtomicsProvider::CompareExchangeTargetValue(&m_idle_thread_count, idle_thread_count, new_idle_threads))
         {
             out_extra_wakeup_is_needed = new_idle_threads >= wakeup_signal_bit;
@@ -1168,10 +1170,10 @@ void dxtemplateJobListThreadedHandler<tThreadWakeup, tJobListContainer>::Registe
     bool wakeup_is_needed = false;
 
     const unsigned wakeup_signal_bit = dxThreadingTraits::wakeup_signal_bit();
-    for (atomicord_t idle_thread_count = dxAtomicsProvider::UnorderedQueryTargetValue(&m_idle_thread_count);
+    for (uint32_t idle_thread_count = dxAtomicsProvider::UnorderedQueryTargetValue(&m_idle_thread_count);
         idle_thread_count % wakeup_signal_bit > idle_thread_count / wakeup_signal_bit; idle_thread_count = dxAtomicsProvider::UnorderedQueryTargetValue(&m_idle_thread_count))
     {
-        atomicord_t new_idle_threads = idle_thread_count + wakeup_signal_bit;
+        uint32_t new_idle_threads = idle_thread_count + wakeup_signal_bit;
         if (dxAtomicsProvider::CompareExchangeTargetValue(&m_idle_thread_count, idle_thread_count, new_idle_threads))
         {
             wakeup_is_needed = idle_thread_count < wakeup_signal_bit;

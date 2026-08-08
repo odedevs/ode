@@ -753,13 +753,7 @@ const dReal *dGeomTriMeshGetLastTransform(dGeomID g)
 /*extern */
 void opcode_collider_cleanup()
 {
-#if !dTLS_ENABLED
-
-    // Clear TC caches
-    TrimeshCollidersCache *pccColliderCache = GetTrimeshCollidersCache(0);
-    pccColliderCache->clearOPCODECaches();
-
-#endif // dTLS_ENABLED
+    // Per-thread caches are cleaned up automatically via thread_local destructors
 }
 
 

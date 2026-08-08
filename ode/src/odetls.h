@@ -1,6 +1,6 @@
 /*************************************************************************
  *                                                                       *
- * Thread local storage access stub for Open Dynamics Engine,            *
+ * Thread local storage for Open Dynamics Engine,                        *
  * Copyright (C) 2008-2025 Oleh Derevenko. All rights reserved.          *
  * Email: odar@eleks.com (change all "a" to "e")                         *
  *                                                                       *
@@ -27,24 +27,13 @@
 
 /*
 
-ODE Thread Local Storage access stub interface.
+ODE Thread Local Storage — implemented with C++ thread_local.
 
 */
 
 
 #ifndef _ODE_ODETLS_H_
 #define _ODE_ODETLS_H_
-
-
-#include "odeou.h"
-
-
-#if dTLS_ENABLED
-
-
-using _OU_NAMESPACE::tlsvaluetype;
-using _OU_NAMESPACE::HTLSKEY;
-using _OU_NAMESPACE::CThreadLocalStorage;
 
 
 struct TrimeshCollidersCache;
@@ -62,12 +51,11 @@ enum EODETLSKIND
     OTK__DEFAULT = OTK_AUTOCLEANUP,
 };
 
-enum EODETLSITEM
-{
-    OTI_DATA_ALLOCATION_FLAGS,
-    OTI_TRIMESH_TRIMESH_COLLIDER_CACHE,
 
-    OTI__MAX,
+struct OdeTlsSlot
+{
+    unsigned allocationFlags;
+    TrimeshCollidersCache *trimeshCache;
 };
 
 
@@ -80,28 +68,11 @@ public:
     static void CleanupForThread();
 
 public:
-    static unsigned GetDataAllocationFlags(EODETLSKIND tkTLSKind)
-    {
-        // Must be a safe call as it is used to test if TLS slot is allocated at all
-        return (unsigned)(sizeint)CThreadLocalStorage::GetStorageValue(m_ahtkStorageKeys[tkTLSKind], OTI_DATA_ALLOCATION_FLAGS);
-    }
+    static unsigned GetDataAllocationFlags(EODETLSKIND tkTLSKind);
+    static void SignalDataAllocationFlags(EODETLSKIND tkTLSKind, unsigned uFlagsMask);
+    static void DropDataAllocationFlags(EODETLSKIND tkTLSKind, unsigned uFlagsMask);
 
-    static void SignalDataAllocationFlags(EODETLSKIND tkTLSKind, unsigned uFlagsMask)
-    {
-        unsigned uCurrentFlags = (unsigned)(sizeint)CThreadLocalStorage::UnsafeGetStorageValue(m_ahtkStorageKeys[tkTLSKind], OTI_DATA_ALLOCATION_FLAGS);
-        CThreadLocalStorage::UnsafeSetStorageValue(m_ahtkStorageKeys[tkTLSKind], OTI_DATA_ALLOCATION_FLAGS, (tlsvaluetype)(sizeint)(uCurrentFlags | uFlagsMask));
-    }
-
-    static void DropDataAllocationFlags(EODETLSKIND tkTLSKind, unsigned uFlagsMask)
-    {
-        unsigned uCurrentFlags = (unsigned)(sizeint)CThreadLocalStorage::UnsafeGetStorageValue(m_ahtkStorageKeys[tkTLSKind], OTI_DATA_ALLOCATION_FLAGS);
-        CThreadLocalStorage::UnsafeSetStorageValue(m_ahtkStorageKeys[tkTLSKind], OTI_DATA_ALLOCATION_FLAGS, (tlsvaluetype)(sizeint)(uCurrentFlags & ~uFlagsMask));
-    }
-
-    static TrimeshCollidersCache *GetTrimeshCollidersCache(EODETLSKIND tkTLSKind)
-    { 
-        return (TrimeshCollidersCache *)CThreadLocalStorage::UnsafeGetStorageValue(m_ahtkStorageKeys[tkTLSKind], OTI_TRIMESH_TRIMESH_COLLIDER_CACHE);
-    }
+    static TrimeshCollidersCache *GetTrimeshCollidersCache(EODETLSKIND tkTLSKind);
 
 public:
     static bool AssignDataAllocationFlags(EODETLSKIND tkTLSKind, unsigned uInitializationFlags);
@@ -112,15 +83,10 @@ public:
 private:
     static void FreeTrimeshCollidersCache(TrimeshCollidersCache *pccCacheInstance);
 
-private:
-    static void _OU_CONVENTION_CALLBACK FreeTrimeshCollidersCache_Callback(tlsvaluetype vValueData);
+    static OdeTlsSlot &getSlot(EODETLSKIND tkTLSKind);
 
-private:
-    static HTLSKEY				m_ahtkStorageKeys[OTK__MAX];
+    friend struct OdeTlsData;
 };
-
-
-#endif // dTLS_ENABLED
 
 
 #endif // _ODE_ODETLS_H_

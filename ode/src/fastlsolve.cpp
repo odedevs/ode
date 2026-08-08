@@ -131,8 +131,8 @@ void ThreadedEquationSolverLDLT::doCooperativelySolveL1StraightValidated(
     dCallWaitID completionWait = resourceContainer->getStockCallWait();
     dAASSERT(completionWait != NULL);
 
-    atomicord32 blockCompletionProgress;
-    cellindexint *blockProgressDescriptors;
+    std::atomic<uint32_t> blockCompletionProgress{0};
+    std::atomic<cellindexint> *blockProgressDescriptors;
     SolveL1StraightCellContext *cellContexts;
 
     SolvingL1StraightMemoryEstimates solvingMemoryEstimates;

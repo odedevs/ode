@@ -1,6 +1,6 @@
 /*************************************************************************
  *                                                                       *
- * Thread local storage access stub for Open Dynamics Engine,            *
+ * Thread local storage for Open Dynamics Engine,                        *
  * Copyright (C) 2008-2025 Oleh Derevenko. All rights reserved.          *
  * Email: odar@eleks.com (change all "a" to "e")                         *
  *                                                                       *
@@ -27,71 +27,162 @@
 
 /*
 
-ODE Thread Local Storage access stub implementation.
+ODE Thread Local Storage — implemented with C++ thread_local.
 
 */
 
 #include <ode/common.h>
 #include "config.h"
-#include "odemath.h"
 #include "odetls.h"
 #include "collision_trimesh_internal.h"
 
-
-#if dTLS_ENABLED
-
-
-using _OU_NAMESPACE::CTLSInitialization;
+#ifdef _WIN32
+// Undefine ARRAYSIZE from OPCODE's IceUtils.h before windows.h redefines it
+#undef ARRAYSIZE
+#include <windows.h>
+#endif
 
 
 //////////////////////////////////////////////////////////////////////////
-// Class static fields
+// Thread-local storage
 
-HTLSKEY COdeTls::m_ahtkStorageKeys[OTK__MAX] = { 0 };
+struct OdeTlsData
+{
+    OdeTlsSlot slots[OTK__MAX] = {};
+
+    void cleanup()
+    {
+        for (int i = 0; i < OTK__MAX; ++i)
+        {
+            if (slots[i].trimeshCache)
+            {
+                COdeTls::FreeTrimeshCollidersCache(slots[i].trimeshCache);
+                slots[i].trimeshCache = nullptr;
+            }
+        }
+    }
+};
+
+
+#ifdef _WIN32
+
+// On Windows, use Fiber-Local Storage (FLS) for reliable per-thread cleanup.
+// MinGW's thread_local destructors have known issues with memory corruption
+// when threads are created and destroyed rapidly.
+
+static DWORD g_flsIndex = FLS_OUT_OF_INDEXES;
+
+static void NTAPI odeTlsFlsCallback(void *data)
+{
+    OdeTlsData *tls = static_cast<OdeTlsData *>(data);
+    if (tls)
+    {
+        tls->cleanup();
+        delete tls;
+    }
+}
+
+static OdeTlsData &getOdeTlsDataRef()
+{
+    OdeTlsData *tls = static_cast<OdeTlsData *>(FlsGetValue(g_flsIndex));
+    if (!tls)
+    {
+        tls = new OdeTlsData();
+        FlsSetValue(g_flsIndex, tls);
+    }
+    return *tls;
+}
+
+#else
+
+// Non-Windows: thread_local destructors are reliable on POSIX platforms
+struct OdeTlsDataWrapper
+{
+    OdeTlsData data;
+    ~OdeTlsDataWrapper() { data.cleanup(); }
+};
+
+static thread_local OdeTlsDataWrapper g_odeTlsWrapper;
+
+static OdeTlsData &getOdeTlsDataRef()
+{
+    return g_odeTlsWrapper.data;
+}
+
+#endif
+
+
+//////////////////////////////////////////////////////////////////////////
+// Private helpers
+
+OdeTlsSlot &COdeTls::getSlot(EODETLSKIND tkTLSKind)
+{
+    return getOdeTlsDataRef().slots[tkTLSKind];
+}
 
 
 //////////////////////////////////////////////////////////////////////////
 // Initialization and finalization
 
-bool COdeTls::Initialize(EODETLSKIND tkTLSKind)
+bool COdeTls::Initialize(EODETLSKIND /*tkTLSKind*/)
 {
-    dIASSERT(!m_ahtkStorageKeys[tkTLSKind]);
-
-    bool bResult = false;
-
-    unsigned uOUFlags = 0;
-
-    if (tkTLSKind == OTK_MANUALCLEANUP)
+#ifdef _WIN32
+    if (g_flsIndex == FLS_OUT_OF_INDEXES)
     {
-        uOUFlags |= CTLSInitialization::SIF_MANUAL_CLEANUP_ON_THREAD_EXIT;
+        g_flsIndex = FlsAlloc(odeTlsFlsCallback);
+        if (g_flsIndex == FLS_OUT_OF_INDEXES)
+            return false;
     }
-
-    if (CTLSInitialization::InitializeTLSAPI(m_ahtkStorageKeys[tkTLSKind], OTI__MAX, uOUFlags))
-    {
-        bResult = true;
-    }
-
-    return bResult;
+#endif
+    return true;
 }
 
 void COdeTls::Finalize(EODETLSKIND tkTLSKind)
 {
-    CTLSInitialization::FinalizeTLSAPI();
+    OdeTlsSlot &slot = getSlot(tkTLSKind);
 
-    m_ahtkStorageKeys[tkTLSKind] = 0;
+    if (slot.trimeshCache)
+    {
+        FreeTrimeshCollidersCache(slot.trimeshCache);
+        slot.trimeshCache = nullptr;
+    }
+    slot.allocationFlags = 0;
 }
-
 
 void COdeTls::CleanupForThread()
 {
-    if (m_ahtkStorageKeys[OTK_MANUALCLEANUP])
+    OdeTlsSlot &slot = getSlot(OTK_MANUALCLEANUP);
+
+    if (slot.trimeshCache)
     {
-        CTLSInitialization::CleanupOnThreadExit();
+        FreeTrimeshCollidersCache(slot.trimeshCache);
+        slot.trimeshCache = nullptr;
     }
-    else
-    {
-        dIASSERT(false); // The class is not intended to be cleaned up manually
-    }
+    slot.allocationFlags = 0;
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+// Accessors
+
+unsigned COdeTls::GetDataAllocationFlags(EODETLSKIND tkTLSKind)
+{
+    return getSlot(tkTLSKind).allocationFlags;
+}
+
+void COdeTls::SignalDataAllocationFlags(EODETLSKIND tkTLSKind, unsigned uFlagsMask)
+{
+    getSlot(tkTLSKind).allocationFlags |= uFlagsMask;
+}
+
+void COdeTls::DropDataAllocationFlags(EODETLSKIND tkTLSKind, unsigned uFlagsMask)
+{
+    getSlot(tkTLSKind).allocationFlags &= ~uFlagsMask;
+}
+
+TrimeshCollidersCache *COdeTls::GetTrimeshCollidersCache(EODETLSKIND tkTLSKind)
+{
+    return getSlot(tkTLSKind).trimeshCache;
 }
 
 
@@ -100,28 +191,24 @@ void COdeTls::CleanupForThread()
 
 bool COdeTls::AssignDataAllocationFlags(EODETLSKIND tkTLSKind, unsigned uInitializationFlags)
 {
-    bool bResult = CThreadLocalStorage::SetStorageValue(m_ahtkStorageKeys[tkTLSKind], OTI_DATA_ALLOCATION_FLAGS, (tlsvaluetype)(sizeint)uInitializationFlags);
-    return bResult;
+    getSlot(tkTLSKind).allocationFlags = uInitializationFlags;
+    return true;
 }
-
 
 bool COdeTls::AssignTrimeshCollidersCache(EODETLSKIND tkTLSKind, TrimeshCollidersCache *pccInstance)
 {
-    dIASSERT(!CThreadLocalStorage::GetStorageValue(m_ahtkStorageKeys[tkTLSKind], OTI_TRIMESH_TRIMESH_COLLIDER_CACHE));
-
-    bool bResult = CThreadLocalStorage::SetStorageValue(m_ahtkStorageKeys[tkTLSKind], OTI_TRIMESH_TRIMESH_COLLIDER_CACHE, (tlsvaluetype)pccInstance, &COdeTls::FreeTrimeshCollidersCache_Callback);
-    return bResult;
+    getSlot(tkTLSKind).trimeshCache = pccInstance;
+    return true;
 }
 
 void COdeTls::DestroyTrimeshCollidersCache(EODETLSKIND tkTLSKind)
 {
-    TrimeshCollidersCache *pccCacheInstance = (TrimeshCollidersCache *)CThreadLocalStorage::GetStorageValue(m_ahtkStorageKeys[tkTLSKind], OTI_TRIMESH_TRIMESH_COLLIDER_CACHE);
+    OdeTlsSlot &slot = getSlot(tkTLSKind);
 
-    if (pccCacheInstance != NULL)
+    if (slot.trimeshCache)
     {
-        FreeTrimeshCollidersCache(pccCacheInstance);
-
-        CThreadLocalStorage::UnsafeSetStorageValue(m_ahtkStorageKeys[tkTLSKind], OTI_TRIMESH_TRIMESH_COLLIDER_CACHE, (tlsvaluetype)NULL);
+        FreeTrimeshCollidersCache(slot.trimeshCache);
+        slot.trimeshCache = nullptr;
     }
 }
 
@@ -134,20 +221,7 @@ void COdeTls::FreeTrimeshCollidersCache(TrimeshCollidersCache *pccCacheInstance)
 #if dTRIMESH_ENABLED 
     delete pccCacheInstance;
 #else
-    dIASSERT(pccCacheInstance == NULL); // The cache is not being allocated if the library is configured without trimeshes
+    dIASSERT(pccCacheInstance == NULL);
 #endif
 }
-
-
-//////////////////////////////////////////////////////////////////////////
-// Value type destructor callbacks
-
-void COdeTls::FreeTrimeshCollidersCache_Callback(tlsvaluetype vValueData)
-{
-    TrimeshCollidersCache *pccCacheInstance = (TrimeshCollidersCache *)vValueData;
-    FreeTrimeshCollidersCache(pccCacheInstance);
-}
-
-
-#endif // #if dTLS_ENABLED
 

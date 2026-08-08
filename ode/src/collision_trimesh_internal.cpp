@@ -332,16 +332,11 @@ FaceAngleDomain FaceAnglesWrapper<TStorageCodec>::retrieveFacesAngleFromStorage(
 
 typedef IFaceAngleStorageControl *(FAngleStorageAllocProc)(unsigned triangleCount, IFaceAngleStorageView *&out_storageView);
 
-BEGIN_NAMESPACE_OU();
-template<>
-FAngleStorageAllocProc *const CEnumUnsortedElementArray<FaceAngleStorageMethod, ASM__MAX, FAngleStorageAllocProc *, 0x161211AD>::m_aetElementArray[] =
-{
+static const CEnumUnsortedElementArray<FaceAngleStorageMethod, ASM__MAX, FAngleStorageAllocProc *> g_AngleStorageAllocProcs = {{
     &FaceAnglesWrapper<FaceAngleStorageCodec<uint8, SSI_SIGNED_STORED> >::allocateInstance, // ASM_BYTE_SIGNED,
     &FaceAnglesWrapper<FaceAngleStorageCodec<uint8, SSI_POSITIVE_STORED> >::allocateInstance, // ASM_BYTE_POSITIVE,
     &FaceAnglesWrapper<FaceAngleStorageCodec<uint16, SSI_SIGNED_STORED> >::allocateInstance, // ASM_WORD_SIGNED,
-};
-END_NAMESPACE_OU();
-static const CEnumUnsortedElementArray<FaceAngleStorageMethod, ASM__MAX, FAngleStorageAllocProc *, 0x161211AD> g_AngleStorageAllocProcs;
+}};
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -453,29 +448,19 @@ void dxTriDataBase::EdgeRecord::setupEdge(dMeshTriangleVertex edgeIdx, int triId
 }
 
 
-BEGIN_NAMESPACE_OU();
-template<>
-const dMeshTriangleVertex CEnumUnsortedElementArray<unsigned, dxTriDataBase::CUF__USE_VERTICES_LAST / dxTriDataBase::CUF__USE_VERTICES_MIN, dMeshTriangleVertex, 0x161116DC>::m_aetElementArray[] = 
-{
+extern const CEnumUnsortedElementArray<unsigned, dxTriDataBase::CUF__USE_VERTICES_LAST / dxTriDataBase::CUF__USE_VERTICES_MIN, dMeshTriangleVertex> g_VertFlagOppositeIndices = {{
     dMTV_FIRST, // kVert0 / kVert_Base
     dMTV_SECOND, // kVert1 / kVert_Base
     dMTV__MAX,
     dMTV_THIRD, // kVert2 / kVert_Base
-};
-END_NAMESPACE_OU();
-/*extern */const CEnumUnsortedElementArray<unsigned, dxTriDataBase::CUF__USE_VERTICES_LAST / dxTriDataBase::CUF__USE_VERTICES_MIN, dMeshTriangleVertex, 0x161116DC> g_VertFlagOppositeIndices;
+}};
 
-BEGIN_NAMESPACE_OU();
-template<>
-const dMeshTriangleVertex CEnumUnsortedElementArray<unsigned, dxTriDataBase::CUF__USE_VERTICES_LAST / dxTriDataBase::CUF__USE_VERTICES_MIN, dMeshTriangleVertex, 0x161225E9>::m_aetElementArray[] = 
-{
+extern const CEnumUnsortedElementArray<unsigned, dxTriDataBase::CUF__USE_VERTICES_LAST / dxTriDataBase::CUF__USE_VERTICES_MIN, dMeshTriangleVertex> g_VertFlagEdgeStartIndices = {{
     dMTV_SECOND, // kVert0 / kVert_Base
     dMTV_THIRD, // kVert1 / kVert_Base
     dMTV__MAX,
     dMTV_FIRST, // kVert2 / kVert_Base
-};
-END_NAMESPACE_OU();
-/*extern */const CEnumUnsortedElementArray<unsigned, dxTriDataBase::CUF__USE_VERTICES_LAST / dxTriDataBase::CUF__USE_VERTICES_MIN, dMeshTriangleVertex, 0x161225E9> g_VertFlagEdgeStartIndices;
+}};
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -536,16 +521,11 @@ int dGeomTriMeshDataPreprocess(dTriMeshDataID g)
 }
 
 
-BEGIN_NAMESPACE_OU();
-template<>
-const FaceAngleStorageMethod CEnumUnsortedElementArray<unsigned, dTRIDATAPREPROCESS_FACE_ANGLES_EXTRA__MAX, FaceAngleStorageMethod, 0x17010902>::m_aetElementArray[] = 
-{
+static const CEnumUnsortedElementArray<unsigned, dTRIDATAPREPROCESS_FACE_ANGLES_EXTRA__MAX, FaceAngleStorageMethod> g_TriMeshDataPreprocess_FaceAndlesExtraDataAngleStorageMethods = {{
     ASM_BYTE_POSITIVE, // dTRIDATAPREPROCESS_FACE_ANGLES_EXTRA_BYTE_POSITIVE,
     ASM_BYTE_SIGNED, // dTRIDATAPREPROCESS_FACE_ANGLES_EXTRA_BYTE_ALL,
     ASM_WORD_SIGNED, // dTRIDATAPREPROCESS_FACE_ANGLES_EXTRA_WORD_ALL,
-};
-END_NAMESPACE_OU();
-static const CEnumUnsortedElementArray<unsigned, dTRIDATAPREPROCESS_FACE_ANGLES_EXTRA__MAX, FaceAngleStorageMethod, 0x17010902> g_TriMeshDataPreprocess_FaceAndlesExtraDataAngleStorageMethods;
+}};
 
 /*extern ODE_API */
 int dGeomTriMeshDataPreprocess2(dTriMeshDataID g, unsigned int buildRequestFlags, const intptr *requestExtraData/*=NULL | const intptr (*)[dTRIDATAPREPROCESS_BUILD__MAX]*/)
@@ -665,16 +645,11 @@ dTriMeshDataID dGeomTriMeshGetData(dGeomID g)
 }
 
 
-BEGIN_NAMESPACE_OU();
-template<>
-const int CEnumSortedElementArray<dxTriMesh::TRIMESHTC, dxTriMesh::TTC__MAX, int, 0x161003D5>::m_aetElementArray[] =
-{
+static const CEnumSortedElementArray<dxTriMesh::TRIMESHTC, dxTriMesh::TTC__MAX, int> g_asiMeshTCGeomClasses = {{
     dSphereClass, // TTC_SPHERE,
     dBoxClass, // TTC_BOX,
     dCapsuleClass, // TTC_CAPSULE,
-};
-END_NAMESPACE_OU();
-static const CEnumSortedElementArray<dxTriMesh::TRIMESHTC, dxTriMesh::TTC__MAX, int, 0x161003D5> g_asiMeshTCGeomClasses;
+}};
 
 /*extern ODE_API */
 void dGeomTriMeshEnableTC(dGeomID g, int geomClass, int enable)

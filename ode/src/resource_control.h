@@ -36,9 +36,6 @@
 #include "error.h"
 
 
-using _OU_NAMESPACE::CSimpleFlags;
-
-
 class dxResourceRequirementDescriptor:
     public dBase
 {

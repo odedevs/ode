@@ -39,9 +39,7 @@
 #include "collision_util.h"
 #include <ode/collision_trimesh.h>
 
-#if dTLS_ENABLED
 #include "odetls.h"
-#endif
 
 
 struct TrimeshCollidersCache;
@@ -51,14 +49,8 @@ struct dxTriMeshData;
 static inline 
 TrimeshCollidersCache *GetTrimeshCollidersCache(unsigned uiTLSKind)
 {
-#if dTLS_ENABLED
     EODETLSKIND tkTLSKind = (EODETLSKIND)uiTLSKind;
     return COdeTls::GetTrimeshCollidersCache(tkTLSKind);
-#else // dTLS_ENABLED
-    (void)uiTLSKind; // unused
-    extern TrimeshCollidersCache g_ccTrimeshCollidersCache;
-    return &g_ccTrimeshCollidersCache;
-#endif // dTLS_ENABLED
 }
 
 
@@ -213,7 +205,7 @@ protected:
         // Get the vertex opposite this edge in the triangle
         dMeshTriangleVertex getOppositeVertexIndex() const
         {
-            extern const CEnumUnsortedElementArray<unsigned, dxTriDataBase::CUF__USE_VERTICES_LAST / dxTriDataBase::CUF__USE_VERTICES_MIN, dMeshTriangleVertex, 0x161116DC> g_VertFlagOppositeIndices;
+            extern const CEnumUnsortedElementArray<unsigned, dxTriDataBase::CUF__USE_VERTICES_LAST / dxTriDataBase::CUF__USE_VERTICES_MIN, dMeshTriangleVertex> g_VertFlagOppositeIndices;
 
             dMeshTriangleVertex oppositeIndex = g_VertFlagOppositeIndices.Encode(((m_vert1Flags | m_vert2Flags) ^ CUF__USE_ALL_VERTICES) / CUF__USE_VERTICES_MIN - 1);
             dIASSERT(dIN_RANGE(oppositeIndex, dMTV__MIN, dMTV__MAX));
@@ -223,7 +215,7 @@ protected:
 
         dMeshTriangleVertex getEdgeStartVertexIndex() const
         {
-            extern const CEnumUnsortedElementArray<unsigned, dxTriDataBase::CUF__USE_VERTICES_LAST / dxTriDataBase::CUF__USE_VERTICES_MIN, dMeshTriangleVertex, 0x161225E9> g_VertFlagEdgeStartIndices;
+            extern const CEnumUnsortedElementArray<unsigned, dxTriDataBase::CUF__USE_VERTICES_LAST / dxTriDataBase::CUF__USE_VERTICES_MIN, dMeshTriangleVertex> g_VertFlagEdgeStartIndices;
 
             dMeshTriangleVertex startIndex = g_VertFlagEdgeStartIndices.Encode(((m_vert1Flags | m_vert2Flags) ^ CUF__USE_ALL_VERTICES) / CUF__USE_VERTICES_MIN - 1);
             dIASSERT(dIN_RANGE(startIndex, dMTV__MIN, dMTV__MAX));
