@@ -32,7 +32,8 @@ tests_SOURCES = \
                 friction.cpp \
                 joint.cpp \
                 main.cpp \
-                odemath.cpp
+                odemath.cpp \
+                random.cpp
 
 tests_LDADD = \
     $(top_builddir)/ode/src/libode.la \

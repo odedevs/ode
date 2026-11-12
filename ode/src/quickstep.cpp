@@ -33,6 +33,7 @@
 #include "lcp.h"
 #include "util.h"
 #include "threadingutils.h"
+#include "random.h"
 
 #include <new>
 
@@ -2631,13 +2632,7 @@ bool dxQuickStepIsland_Stage4LCP_ConstraintsShuffling(dxQuickStepperStage4CallCo
                 void operator ()(dxQuickStepperStage4CallContext *stage4CallContext, unsigned int startIndex, unsigned int indicesCount)
                 {
                     IndexError *order = stage4CallContext->m_order + startIndex;
-
-                    for (unsigned int index = 1; index < indicesCount; ++index) {
-                        int swapIndex = dRandInt(index + 1);
-                        IndexError tmp = order[index];
-                        order[index] = order[swapIndex];
-                        order[swapIndex] = tmp;
-                    }
+                    dxRandShuffle(order, indicesCount);
                 }
             };
 
