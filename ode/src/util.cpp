@@ -346,13 +346,14 @@ struct dxSingleIslandCallContext;
 struct dxIslandsProcessingCallContext
 {
     dxIslandsProcessingCallContext(dxWorld *world, const dxWorldProcessIslandsInfo &islandsInfo, dReal stepSize, dstepper_fn_t stepper):
-        m_world(world), m_islandsInfo(islandsInfo), m_stepSize(stepSize), m_stepper(stepper),
+        m_world(world), m_islandsInfo(islandsInfo), m_stepSize(stepSize), m_stepSeed(0), m_stepper(stepper),
         m_groupReleasee(NULL), m_islandToProcessStorage(0), m_stepperAllowedThreads(0), m_lcpAllowedThreads(0)
     {
     }
 
     void AssignGroupReleasee(dCallReleaseeID groupReleasee) { m_groupReleasee = groupReleasee; }
     void SetAllowedThreadCounts(unsigned stepperAllowedThreadCount, unsigned lcpAllowedThreadCount) { m_stepperAllowedThreads = stepperAllowedThreadCount; m_lcpAllowedThreads = lcpAllowedThreadCount; }
+    void AssignStepSeed(duint32 stepSeed) { m_stepSeed = stepSeed; }
 
     static int ThreadedProcessGroup_Callback(void *callContext, dcallindex_t callInstanceIndex, dCallReleaseeID callThisReleasee);
     bool ThreadedProcessGroup();
@@ -371,6 +372,7 @@ struct dxIslandsProcessingCallContext
     dxWorld                         *const m_world;
     dxWorldProcessIslandsInfo const &m_islandsInfo;
     dReal                           const m_stepSize;
+    duint32                         m_stepSeed;
     dstepper_fn_t                   const m_stepper;
     dCallReleaseeID                 m_groupReleasee;
     volatile sizeint                m_islandToProcessStorage;
@@ -387,7 +389,7 @@ struct dxSingleIslandCallContext
         m_islandsProcessingContext(islandsProcessingContext), m_islandIndex(0), 
         m_stepperArena(stepperArena), m_arenaInitialState(arenaInitialState), 
         m_stepperCallContext(islandsProcessingContext->m_world, islandsProcessingContext->m_stepSize, 
-            islandsProcessingContext->m_stepperAllowedThreads, islandsProcessingContext->m_lcpAllowedThreads, stepperArena, islandBodiesStart, islandJointsStart)
+            islandsProcessingContext->m_stepSeed, islandsProcessingContext->m_stepperAllowedThreads, islandsProcessingContext->m_lcpAllowedThreads, stepperArena, islandBodiesStart, islandJointsStart)
     {
     }
 
@@ -397,9 +399,9 @@ struct dxSingleIslandCallContext
     }
 
     void AssignIslandSelection(dxBody *const *islandBodiesStart, dxJoint *const *islandJointsStart, 
-        unsigned islandBodiesCount, unsigned islandJointsCount)
+        unsigned islandBodiesCount, unsigned islandJointsCount, sizeint selectedIslandIndex)
     {
-        m_stepperCallContext.AssignIslandSelection(islandBodiesStart, islandJointsStart, islandBodiesCount, islandJointsCount);
+        m_stepperCallContext.AssignIslandSelection(islandBodiesStart, islandJointsStart, islandBodiesCount, islandJointsCount, selectedIslandIndex);
     }
 
     dxBody *const *GetSelectedIslandBodiesEnd() const { return m_stepperCallContext.GetSelectedIslandBodiesEnd(); }
@@ -886,7 +888,7 @@ static unsigned EstimateIslandProcessingSimultaneousCallsMaximumCount(unsigned a
 // bodies will not be included in the simulation. disabled bodies are
 // re-enabled if they are found to be part of an active island.
 bool dxProcessIslands (dxWorld *world, const dxWorldProcessIslandsInfo &islandsInfo, 
-    dReal stepSize, dstepper_fn_t stepper, dmaxcallcountestimate_fn_t maxCallCountEstimator)
+    dReal stepSize, bool drawStepSeed, dstepper_fn_t stepper, dmaxcallcountestimate_fn_t maxCallCountEstimator)
 {
     bool result = false;
 
@@ -912,6 +914,12 @@ bool dxProcessIslands (dxWorld *world, const dxWorldProcessIslandsInfo &islandsI
         unsigned simultaneousCallsCount = EstimateIslandProcessingSimultaneousCallsMaximumCount(activeThreadCount, islandsAllowedThreadCount, stepperAllowedThreadCount, lcpAllowedThreadCount, maxCallCountEstimator);
         if (!world->PreallocateResourcesForThreadedCalls(simultaneousCallsCount)) {
             break;
+        }
+
+        if (drawStepSeed) {
+            // The step's seed of the per-island random reordering (quickstep.cpp), drawn on the calling thread after
+            // the last allocation that can fail and before any island is stepped: a step that fails draws nothing.
+            callContext.AssignStepSeed((duint32)dRand());
         }
 
         dCallReleaseeID groupReleasee;
@@ -1014,7 +1022,7 @@ void dxIslandsProcessingCallContext::ThreadedProcessIslandSearch(dxSingleIslandC
 
             if (islandIndex == islandToProcess) {
                 // Store selected island details
-                stepperCallContext->AssignIslandSelection(islandBodiesStart, islandJointsStart, bcount, jcount);
+                stepperCallContext->AssignIslandSelection(islandBodiesStart, islandJointsStart, bcount, jcount, islandToProcess);
 
                 // Store next island index to continue search from
                 ++islandIndex;

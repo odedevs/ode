@@ -906,6 +906,7 @@ if(ODE_WITH_TESTS)
 		tests/joint.cpp
 		tests/main.cpp
 		tests/odemath.cpp
+		tests/quickstep.cpp
 		tests/random.cpp
 		tests/joints/amotor.cpp
 		tests/joints/ball.cpp

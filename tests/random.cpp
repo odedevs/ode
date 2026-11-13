@@ -26,12 +26,16 @@
  * Only public functions and the header's inline helpers are called: dxRandReserve() is internal to the library and
  * cannot be reached from here when ODE is a DLL. It is the compare-exchange loop of dRand() around dxRandSkip(),
  * which is checked here, as is dxRandShuffleFromState(), the body of dxRandShuffle().
+ *
+ * dxRandIslandSeed() and dxRandShuffleAdvancingState() are QuickStep's per-island random reordering: each island
+ * starts its own state from the step's seed and its index, and its shuffles continue from that state.
  */
 
 #include <UnitTest++.h>
 #include <ode/ode.h>
 #include "../ode/src/random.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <vector>
 
@@ -162,6 +166,97 @@ TEST(test_dxRandShuffleFromState_matches_dRandInt_loop)
             dxRandSkip(multiplier, increment, count > 1 ? count - 1 : 0);
             unsigned long actualSeed = multiplier * seed + increment;
             CHECK_EQUAL(expectedSeed, actualSeed);
+        }
+    }
+}
+
+
+TEST(test_dxRandIslandSeed_known_values)
+{
+    // fmix32(stepSeed + islandIndex * 0x9E3779B9), computed outside ODE. The per-island random reordering gives other
+    // results if these change.
+    CHECK_EQUAL(0x00000000UL, (unsigned long)dxRandIslandSeed(0x00000000, 0));
+    CHECK_EQUAL(0x92CA2F0EUL, (unsigned long)dxRandIslandSeed(0x00000000, 1));
+    CHECK_EQUAL(0x3CD6E3F3UL, (unsigned long)dxRandIslandSeed(0x00000000, 2));
+    CHECK_EQUAL(0x514E28B7UL, (unsigned long)dxRandIslandSeed(0x00000001, 0));
+    CHECK_EQUAL(0xE37CD1BCUL, (unsigned long)dxRandIslandSeed(0x12345678, 0));
+    CHECK_EQUAL(0x9AABB687UL, (unsigned long)dxRandIslandSeed(0x12345678, 1000));
+    CHECK_EQUAL(0x2994C1B5UL, (unsigned long)dxRandIslandSeed(0xFFFFFFFF, 3));
+    CHECK_EQUAL(0xA0B40B8DUL, (unsigned long)dxRandIslandSeed(0x9E3779B9, 65535));
+}
+
+
+TEST(test_dxRandIslandSeed_distinct_states)
+{
+    const unsigned int islandCount = 65536;
+
+    for (unsigned int seedIndex = 0; seedIndex != TEST_SEED_COUNT; ++seedIndex) {
+        const duint32 stepSeed = TEST_SEEDS[seedIndex];
+        // The next step's seed: the next value of dRand()'s sequence.
+        duint32 nextStepSeed = stepSeed;
+        dxRandNext(nextStepSeed);
+
+        std::vector<duint32> states(islandCount);
+        unsigned int sameStateCount = 0;
+        for (unsigned int islandIndex = 0; islandIndex != islandCount; ++islandIndex) {
+            states[islandIndex] = dxRandIslandSeed(stepSeed, islandIndex);
+            if (dxRandIslandSeed(nextStepSeed, islandIndex) == states[islandIndex]) {
+                ++sameStateCount;
+            }
+        }
+
+        // An island starts from another state at the next step.
+        CHECK_EQUAL(0U, sameStateCount);
+
+        // The islands of a step start from distinct states.
+        std::sort(states.begin(), states.end());
+        CHECK(std::adjacent_find(states.begin(), states.end()) == states.end());
+    }
+}
+
+
+TEST(test_dxRandShuffleAdvancingState_continues_the_sequence)
+{
+    SeedRestorer seedRestorer;
+
+    // Two shuffles from one state, the second continuing where the first left it, against the dRandInt() loop run
+    // twice from the same seed; the first shuffle also against dxRandShuffleFromState().
+    const unsigned int counts[] = { 0, 1, 2, 3, 5, 17, 257, 65537 };
+    const unsigned int countCount = sizeof(counts) / sizeof(counts[0]);
+
+    for (unsigned int seedIndex = 0; seedIndex != TEST_SEED_COUNT; ++seedIndex) {
+        const duint32 seed = TEST_SEEDS[seedIndex];
+
+        for (unsigned int countIndex = 0; countIndex != countCount; ++countIndex) {
+            const unsigned int count = counts[countIndex];
+
+            std::vector<unsigned int> expected(count), actual(count), firstFromState(count);
+            for (unsigned int index = 0; index != count; ++index) {
+                expected[index] = index;
+                actual[index] = index;
+                firstFromState[index] = index;
+            }
+
+            // The reference: the swaps of both shuffles, each with its own dRandInt() call.
+            dRandSetSeed(seed);
+            for (unsigned int shuffle = 0; shuffle != 2; ++shuffle) {
+                for (unsigned int index = 1; index < count; ++index) {
+                    int swapIndex = dRandInt((int)(index + 1));
+                    unsigned int tmp = expected[index];
+                    expected[index] = expected[swapIndex];
+                    expected[swapIndex] = tmp;
+                }
+            }
+            unsigned long expectedState = dRandGetSeed();
+
+            duint32 state = seed;
+            dxRandShuffleAdvancingState(count != 0 ? &actual[0] : NULL, count, state);
+            dxRandShuffleFromState(count != 0 ? &firstFromState[0] : NULL, count, seed);
+            CHECK(firstFromState == actual);
+
+            dxRandShuffleAdvancingState(count != 0 ? &actual[0] : NULL, count, state);
+            CHECK(expected == actual);
+            CHECK_EQUAL(expectedState, (unsigned long)state);
         }
     }
 }

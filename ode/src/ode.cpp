@@ -1878,7 +1878,8 @@ int dWorldStep (dWorldID w, dReal stepsize)
     dxWorldProcessIslandsInfo islandsinfo;
     if (dxReallocateWorldProcessContext (w, islandsinfo, stepsize, &dxEstimateStepMemoryRequirements))
     {
-        if (dxProcessIslands (w, islandsinfo, stepsize, &dxStepIsland, &dxEstimateStepMaxCallCount))
+        // No step's seed: dxStepIsland() does not reorder.
+        if (dxProcessIslands (w, islandsinfo, stepsize, false, &dxStepIsland, &dxEstimateStepMaxCallCount))
         {
             result = true;
         }
@@ -1897,7 +1898,10 @@ int dWorldQuickStep (dWorldID w, dReal stepsize)
     dxWorldProcessIslandsInfo islandsinfo;
     if (dxReallocateWorldProcessContext (w, islandsinfo, stepsize, &dxEstimateQuickStepMemoryRequirements))
     {
-        if (dxProcessIslands (w, islandsinfo, stepsize, &dxQuickStepIsland, &dxEstimateQuickStepMaxCallCount))
+        // The per-island random reordering (quickstep.cpp) needs a step's seed, which dxProcessIslands() draws.
+        bool drawStepSeed = w->qs.random_reordering_mode == dWORLDQUICKSTEP_RANDOMREORDERING_PER_ISLAND;
+
+        if (dxProcessIslands (w, islandsinfo, stepsize, drawStepSeed, &dxQuickStepIsland, &dxEstimateQuickStepMaxCallCount))
         {
             result = true;
         }
@@ -2186,6 +2190,22 @@ dReal dWorldGetQuickStepW (dWorldID w)
 {
     dAASSERT(w);
     return w->qs.w;
+}
+
+
+void dWorldSetQuickStepRandomReorderingMode (dWorldID w, int mode)
+{
+    dAASSERT(w);
+    dUASSERT(mode == dWORLDQUICKSTEP_RANDOMREORDERING_SHARED || mode == dWORLDQUICKSTEP_RANDOMREORDERING_PER_ISLAND,
+        "unknown random reordering mode");
+    w->qs.random_reordering_mode = mode;
+}
+
+
+int dWorldGetQuickStepRandomReorderingMode (dWorldID w)
+{
+    dAASSERT(w);
+    return w->qs.random_reordering_mode;
 }
 
 

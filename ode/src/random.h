@@ -40,6 +40,7 @@
 
 #include <ode/odeconfig.h>
 #include "error.h"
+#include "typedefs.h"
 
 
 /* dRand()'s step: x -> dxRAND_MULTIPLIER * x + dxRAND_INCREMENT (mod 2^32). */
@@ -89,6 +90,33 @@ void dxRandSkip(duint32 &multiplier, duint32 &increment, unsigned int count)
  * operation and returns the current seed.
  */
 duint32 dxRandReserve(unsigned int count);
+
+
+/* The stride between the islands of a step before dxRandIslandSeed() hashes: 2^32 divided by the golden ratio, odd. */
+static const duint32 dxRAND_ISLAND_STRIDE = 0x9E3779B9;
+
+
+/*
+ * Gives an island's starting state for one step of QuickStep's per-island random reordering (quickstep.cpp):
+ * MurmurHash3's 32-bit finalizer (fmix32) of stepSeed + islandIndex * dxRAND_ISLAND_STRIDE. Hashed, so that
+ * neighbouring islands do not start from neighbouring states: two states d apart are still a^n * d apart n values
+ * later (a = dxRAND_MULTIPLIER), a fixed pattern between the islands' shuffles. The multiplication by an odd constant,
+ * the addition and fmix32 are all one-to-one on 32-bit values, so the islands of a step (fewer than 2^32) start from
+ * distinct states, and an island starts from another state at another step's seed.
+ */
+static inline
+duint32 dxRandIslandSeed(duint32 stepSeed, sizeint islandIndex)
+{
+    duint32 state = stepSeed + (duint32)islandIndex * dxRAND_ISLAND_STRIDE;
+
+    // fmix32
+    state ^= state >> 16;
+    state *= (duint32)0x85EBCA6B;
+    state ^= state >> 13;
+    state *= (duint32)0xC2B2AE35;
+    state ^= state >> 16;
+    return state;
+}
 
 
 /*
@@ -161,10 +189,12 @@ int dxRandIntFromValue(duint32 value, int n)
 /*
  * Shuffles items[0 .. count) with the swaps of
  *     for (index = 1; index < count; ++index) swap(items[index], items[dRandInt(index + 1)]);
- * but draws the values from state instead of from dRand(): the first draw is the value that follows state.
+ * but draws the values from state instead of from dRand(): the first draw is the value that follows state. Leaves
+ * state at the last value drawn, count - 1 values further (unchanged for a count of 0 or 1), where the next shuffle
+ * continues the sequence.
  */
 template<class TItem>
-void dxRandShuffleFromState(TItem *items, unsigned int count, duint32 state)
+void dxRandShuffleAdvancingState(TItem *items, unsigned int count, duint32 &state)
 {
     for (unsigned int index = 1; index < count; ++index) {
         int swapIndex = dxRandIntFromValue(dxRandNext(state), (int)(index + 1));
@@ -172,6 +202,14 @@ void dxRandShuffleFromState(TItem *items, unsigned int count, duint32 state)
         items[index] = items[swapIndex];
         items[swapIndex] = tmp;
     }
+}
+
+
+/* The same shuffle, drawing from a copy of state. */
+template<class TItem>
+void dxRandShuffleFromState(TItem *items, unsigned int count, duint32 state)
+{
+    dxRandShuffleAdvancingState(items, count, state);
 }
 
 

@@ -25,6 +25,7 @@
 #include <ode/timer.h>
 #include <ode/error.h>
 #include <ode/misc.h>
+#include <ode/objects.h>
 #include "config.h"
 #include "matrix.h"
 #include "odemath.h"
@@ -84,6 +85,72 @@
 #endif
 dSASSERT(RANDOM_CONSTRAINTS_REORDERING_FREQUENCY != 0);
 #endif
+
+/*
+ * Per-island random reordering.
+ *
+ * The random reordering shuffles an island's constraint rows every RANDOM_CONSTRAINTS_REORDERING_FREQUENCY iterations.
+ * In the shared mode, the default, it draws from dRand()'s process-wide sequence (dxRandShuffle(), random.h); it is
+ * the only use of dRand() while stepping. Stepped by one thread, the islands draw in a fixed order, so the same
+ * dRandSetSeed() and the same calls give the same results. With island threads, the islands reserve their values in
+ * whatever order the threads get there, so two runs can differ from the first step.
+ *
+ * The per-island mode gives each island a sequence of its own, which neither the other islands nor the threads'
+ * timing touch:
+ * - API (include/ode/objects.h): dWorldSetQuickStepRandomReorderingMode() and dWorldGetQuickStepRandomReorderingMode(),
+ *   with dWORLDQUICKSTEP_RANDOMREORDERING_SHARED (0, the default) and dWORLDQUICKSTEP_RANDOMREORDERING_PER_ISLAND (1).
+ *   The modes are macros, so that an application can test for the API with #ifdef and still build against an ODE
+ *   without it. The mode is stored in dxQuickStepParameters (objects.h).
+ * - Per step: in the per-island mode, dxProcessIslands() (util.cpp) draws one value with dRand() for dWorldQuickStep(),
+ *   the step's seed, on the calling thread, after its last allocation that can fail and before it dispatches the
+ *   islands (whatever CONSTRAINTS_REORDERING_METHOD is). It passes the seed to every island's stepper context
+ *   (m_stepSeed), with the island's index in the step's island order (m_selectedIslandIndex).
+ * - Per island: stage 4 reads the mode (m_SOR_randomReorderingPerIsland) once for each island with constraint rows.
+ *   In the per-island mode, it starts the island's state at dxRandIslandSeed(m_stepSeed, m_selectedIslandIndex)
+ *   (random.h); each shuffle draws from that state without atomic operations and leaves it after its last draw, for
+ *   the next shuffle (dxRandShuffleAdvancingState()). In the shared mode, the shuffle is dxRandShuffle(). In both,
+ *   the atomic exchange on m_SOR_reorderHeadTaken picks the thread that shuffles.
+ *
+ * Why the values then do not depend on the threads:
+ * - The island order is fixed before the dispatch: BuildIslandsAndEstimateStepperMemoryRequirements() (util.cpp)
+ *   builds the islands on the calling thread, in the order of the world's body list, and
+ *   ObtainNextIslandToBeProcessed() hands them out by index: an island has the same index whichever thread steps it.
+ * - The step's seed is drawn before any island is stepped.
+ * - One thread at a time advances an island's state: one thread shuffles at each reordering (m_SOR_reorderHeadTaken),
+ *   and whole iterations separate the reorderings. The single-threaded LCP path calls the same shuffle, so one thread
+ *   and several draw the same values for every island.
+ *
+ * The values are not all that threads can change. With several LCP solving threads per island
+ * (dWorldSetSteppingThreadingParameters()), the threaded LCP solver makes each row wait for one earlier row only, the
+ * later of its two bodies' last rows before it (dxQuickStepIsland_Stage4LCP_DependencyMapForNewOrderRebuilding()),
+ * so it can solve a row before, or at the same time as, an earlier row of its other body: the results then depend
+ * on the threads' timing in either mode. In an island of one body, each row waits for the one before it, so the
+ * solver keeps the shuffled order. With one LCP solving thread per island, the default, tests/quickstep.cpp finds
+ * threaded steps bit-identical to unthreaded ones.
+ *
+ * Consequences:
+ * - Each dWorldQuickStep() that succeeds advances dRand()'s sequence by exactly one value, whatever the islands, so
+ *   dRandSetSeed() still sets everything; a step that fails draws nothing.
+ * - dRand() calls made at the same time from other threads (another world's step, the application) still race with
+ *   the step's draw.
+ * - The mode changes the results, single-threaded too: seeds recorded in the shared mode don't replay in the
+ *   per-island mode.
+ * - Cost: one dRand() per step and one hash per island with constraint rows; the shuffles draw without atomic
+ *   operations.
+ * - dWorldStep() draws no step's seed: its stepper does not reorder.
+ *
+ * Tests:
+ * - tests/random.cpp: dxRandIslandSeed()'s values, computed outside ODE; distinct states for the islands of a step,
+ *   and another state for an island at the next step's seed; two dxRandShuffleAdvancingState() calls in a row, the
+ *   second from the state the first left, give the dRandInt() loop run twice.
+ * - tests/quickstep.cpp, in the per-island mode from the same seed: box piles on a plane and hinge chains, without a
+ *   threading implementation and with a pool of 4 threads at the default thread counts; boxes sliding on a plane,
+ *   each alone in its island, without threads and with the same pool and 4 LCP solving threads. 3 threaded runs per
+ *   setup: every body bit-identical in every run, and dRand()'s seed one value further per step. Also the mode's
+ *   setter and getter, the per-island mode's results differing from the shared mode's, and the sliding boxes'
+ *   results differing with another seed. The threaded runs are skipped when ODE is built without its built-in
+ *   threading implementation.
+ */
 
 enum dxRandomReorderStage
 {
@@ -711,6 +778,8 @@ struct dxQuickStepperStage4CallContext
         m_LCP_extra_num_iterations = 0;
         m_cf_4b = 0;
         m_ji_4b = 0;
+        m_SOR_randomReorderingPerIsland = callContext->m_world->qs.random_reordering_mode == dWORLDQUICKSTEP_RANDOMREORDERING_PER_ISLAND;
+        m_SOR_randomState = m_SOR_randomReorderingPerIsland ? dxRandIslandSeed(callContext->m_stepSeed, callContext->m_selectedIslandIndex) : 0;
     }
 
     void AssignLCP_IterationData(dCallReleaseeID releaseeInstance, unsigned int iterationAllowedThreads)
@@ -788,6 +857,10 @@ struct dxQuickStepperStage4CallContext
     volatile atomicord32            m_SOR_reorderThreadsRemaining;
     volatile atomicord32            m_cf_4b;
     volatile atomicord32            m_ji_4b;
+    // The per-island random reordering (see the configuration section): the mode, read once per island, and in the
+    // per-island mode the island's state, which each shuffle advances.
+    bool                            m_SOR_randomReorderingPerIsland;
+    duint32                         m_SOR_randomState;
 };
 
 
@@ -2632,7 +2705,13 @@ bool dxQuickStepIsland_Stage4LCP_ConstraintsShuffling(dxQuickStepperStage4CallCo
                 void operator ()(dxQuickStepperStage4CallContext *stage4CallContext, unsigned int startIndex, unsigned int indicesCount)
                 {
                     IndexError *order = stage4CallContext->m_order + startIndex;
-                    dxRandShuffle(order, indicesCount);
+                    if (stage4CallContext->m_SOR_randomReorderingPerIsland) {
+                        // One thread at a time advances the island's state: the one that takes the head below.
+                        dxRandShuffleAdvancingState(order, indicesCount, stage4CallContext->m_SOR_randomState);
+                    }
+                    else {
+                        dxRandShuffle(order, indicesCount);
+                    }
                 }
             };
 

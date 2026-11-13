@@ -33,6 +33,7 @@ tests_SOURCES = \
                 joint.cpp \
                 main.cpp \
                 odemath.cpp \
+                quickstep.cpp \
                 random.cpp
 
 tests_LDADD = \
