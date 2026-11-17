@@ -196,6 +196,7 @@ public:
     bool m_dynamicIterationCountAdjustmentEnabled;
     dWorldQuickStepIterationCount_DynamicAdjustmentStatistics *m_statistics; // Adjustment statistics (the internal one or an externally assigned)
     dReal w;                               // the SOR over-relaxation parameter
+    int random_reordering_mode;            // a dWORLDQUICKSTEP_RANDOMREORDERING_* value (quickstep.cpp)
 
 private:
     dWorldQuickStepIterationCount_DynamicAdjustmentStatistics m_internal_statistics; // The internal statistics is used to not have to check m_statistics for NULL; the local instance is used instead of a global one to avoid cache line conflicts between different threads possibly serving separate worlds.
