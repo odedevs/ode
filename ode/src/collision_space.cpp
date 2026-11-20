@@ -439,6 +439,9 @@ void dxHashSpace::collide (void *data, dNearCallback *callback)
     typedef std::vector<dxAABB> AABBlist;
     AABBlist hash_boxes; // list of AABBs in hash table
     AABBlist big_boxes; // list of AABBs too big for hash table
+    hash_boxes.reserve(count);
+    // total number of (AABB, cell) hash table nodes, see the node pool below
+    sizeint numNodes = 0;
     maxlevel = global_minlevel - 1;
     for (geom = first; geom; geom=geom->next) {
         if (!GEOM_ENABLED(geom)){
@@ -461,6 +464,10 @@ void dxHashSpace::collide (void *data, dNearCallback *callback)
 
                 aabb.dbounds[i] = (int) dFloor(aabbBound);
             }
+            // count the cells this AABB will be inserted into
+            numNodes += sizeint(aabb.dbounds[1] - aabb.dbounds[0] + 1) *
+                        sizeint(aabb.dbounds[3] - aabb.dbounds[2] + 1) *
+                        sizeint(aabb.dbounds[5] - aabb.dbounds[4] + 1);
             // set AABB index
             aabb.index = hash_boxes.size();
             // aabb goes in main list
@@ -499,6 +506,16 @@ void dxHashSpace::collide (void *data, dNearCallback *callback)
     typedef std::vector<Node*> HashTable;
     HashTable table(sz);
 
+    // All nodes come from one block instead of one heap allocation per
+    // (AABB, cell) on every collide() call. numNodes was counted while
+    // discretizing the AABBs above so that the block never reallocates
+    // (nodes point at each other); that count must match the cells visited
+    // by the insertion loop below. Each AABB covers at most 2 cells per axis
+    // (findLevel() picks a cell at least as big as the box), so
+    // numNodes <= 8 * hash_boxes.size().
+    std::vector<Node> nodes;
+    nodes.reserve(numNodes);
+
     // add each AABB to the hash table (may need to add it to up to 8 cells)
     const AABBlist::iterator hashend = hash_boxes.end();
     for (AABBlist::iterator aabb = hash_boxes.begin(); aabb != hashend; ++aabb) {
@@ -513,7 +530,8 @@ void dxHashSpace::collide (void *data, dNearCallback *callback)
                 for (int zi = zbegin; zi <= zend; (hi = hi + 1U != sz ? hi + 1U : 0UL), zi++) {
                     // get the hash index
                     // add a new node to the hash table
-                    Node *node = new Node;
+                    nodes.push_back(Node());
+                    Node *node = &nodes.back();
                     node->x = xi;
                     node->y = yi;
                     node->z = zi;
@@ -524,6 +542,9 @@ void dxHashSpace::collide (void *data, dNearCallback *callback)
             }
         }
     }
+    // a mismatch with the counting loop would have reallocated `nodes' and
+    // left every node->next dangling
+    dIASSERT(nodes.size() == numNodes);
 
     // now that all AABBs are loaded into the hash table, we do the actual
     // collision detection. for all AABBs, check for other AABBs in the
@@ -600,15 +621,6 @@ void dxHashSpace::collide (void *data, dNearCallback *callback)
             collideAABBs (aabb->geom, aabb2->geom, data, callback);
         }
     }
-
-    // deallocate table
-    const HashTable::iterator tableend = table.end();
-    for (HashTable::iterator el = table.begin(); el != tableend; ++el)
-        for (Node* node = *el; node; ) {
-            Node* next = node->next;
-            delete node;
-            node = next;
-        }
 
     lock_count--;
 }
