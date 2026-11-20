@@ -97,6 +97,8 @@ TEST(test_collision_sphere_point_depth)
         CHECK_CLOSE(-REAL(0.5), dGeomSpherePointDepth(sphere, -0.9, -1.2,    0), PROXIMITY_TOLERANCE);
         CHECK_CLOSE(-REAL(0.5), dGeomSpherePointDepth(sphere,    0, -0.9, -1.2), PROXIMITY_TOLERANCE);
         CHECK_CLOSE(-REAL(0.5), dGeomSpherePointDepth(sphere, -1.2,    0, -0.9), PROXIMITY_TOLERANCE);
+
+        dGeomDestroy(sphere);
     }
 }
 
@@ -215,5 +217,7 @@ TEST(test_collision_box_point_depth)
         CHECK_CLOSE(-REAL(0.6) * length, dGeomBoxPointDepth(cube, -1.2, -1.4,  1.4), PROXIMITY_TOLERANCE);
         CHECK_CLOSE(-REAL(0.6) * length, dGeomBoxPointDepth(cube,  1.4, -1.2, -1.4), PROXIMITY_TOLERANCE);
         CHECK_CLOSE(-REAL(0.6) * length, dGeomBoxPointDepth(cube, -1.4,  1.4, -1.2), PROXIMITY_TOLERANCE);
+
+        dGeomDestroy(cube);
     }
 }

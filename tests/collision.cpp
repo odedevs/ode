@@ -93,6 +93,10 @@ TEST(test_collision_trimesh_sphere_exact)
             CHECK_EQUAL(0, cg[i].depth);
             CHECK_ARRAY_EQUAL(rtrinormal, cg[i].normal, 3);
         }
+
+        dGeomDestroy(sphere);
+        dGeomDestroy(trimesh);
+        dGeomTriMeshDataDestroy(data);
     }
 }
 
