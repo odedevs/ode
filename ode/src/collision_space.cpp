@@ -440,6 +440,8 @@ void dxHashSpace::collide (void *data, dNearCallback *callback)
     AABBlist hash_boxes; // list of AABBs in hash table
     AABBlist big_boxes; // list of AABBs too big for hash table
     hash_boxes.reserve(count);
+    // total number of (AABB, cell) hash table nodes, see the node pool below
+    sizeint numNodes = 0;
     maxlevel = global_minlevel - 1;
     for (geom = first; geom; geom=geom->next) {
         if (!GEOM_ENABLED(geom)){
@@ -462,6 +464,10 @@ void dxHashSpace::collide (void *data, dNearCallback *callback)
 
                 aabb.dbounds[i] = (int) dFloor(aabbBound);
             }
+            // count the cells this AABB will be inserted into
+            numNodes += sizeint(aabb.dbounds[1] - aabb.dbounds[0] + 1) *
+                        sizeint(aabb.dbounds[3] - aabb.dbounds[2] + 1) *
+                        sizeint(aabb.dbounds[5] - aabb.dbounds[4] + 1);
             // set AABB index
             aabb.index = hash_boxes.size();
             // aabb goes in main list
@@ -501,18 +507,12 @@ void dxHashSpace::collide (void *data, dNearCallback *callback)
     HashTable table(sz);
 
     // All nodes come from one block instead of one heap allocation per
-    // (AABB, cell) on every collide() call: count them first so that the
-    // block never reallocates (nodes point at each other). This must visit
-    // the same cells as the insertion loop below. Each AABB covers at most
-    // 2 cells per axis (findLevel() picks a cell at least as big as the box),
-    // so numNodes <= 8 * hash_boxes.size().
-    sizeint numNodes = 0;
-    for (AABBlist::const_iterator aabb = hash_boxes.begin(); aabb != hash_boxes.end(); ++aabb) {
-        const int *dbounds = aabb->dbounds;
-        numNodes += sizeint(dbounds[1] - dbounds[0] + 1) *
-                    sizeint(dbounds[3] - dbounds[2] + 1) *
-                    sizeint(dbounds[5] - dbounds[4] + 1);
-    }
+    // (AABB, cell) on every collide() call. numNodes was counted while
+    // discretizing the AABBs above so that the block never reallocates
+    // (nodes point at each other); that count must match the cells visited
+    // by the insertion loop below. Each AABB covers at most 2 cells per axis
+    // (findLevel() picks a cell at least as big as the box), so
+    // numNodes <= 8 * hash_boxes.size().
     std::vector<Node> nodes;
     nodes.reserve(numNodes);
 
