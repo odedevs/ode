@@ -30,6 +30,7 @@ TESTS = tests
 tests_SOURCES = \
                 collision.cpp \
                 friction.cpp \
+                hash_space.cpp \
                 joint.cpp \
                 main.cpp \
                 odemath.cpp

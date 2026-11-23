@@ -35,6 +35,7 @@ option(ODE_WITH_LIBCCD "Use libccd for handling some collision tests absent in O
 option(ODE_WITH_OPCODE "Use old OPCODE trimesh-trimesh collider." ON)
 option(ODE_WITH_OU "Use TLS for global caches (allows threaded collision checks for separated spaces)." OFF)
 option(ODE_WITH_TESTS "Builds the unit test application." ON)
+option(ODE_HASH_SPACE_SHRINKING "Let hash spaces periodically release unused collision scratch memory (defines ALLOW_HASH_SPACE_SHRINKING)." OFF)
 option(ODE_WIN32_LIB_OUTPUT_NAME_BASED_ON_FLOAT_SIZE "The output name of the library will be based on the size of float, on Windows." ON)
 option(ODE_WIN32_INSTALL_STATIC_LIBS_PDB "Install the PDB files for the static libraries (.lib) on Windows." OFF)
 
@@ -607,6 +608,10 @@ if(ODE_16BIT_INDICES)
 	target_compile_definitions(ODE PRIVATE -DdTRIMESH_16BIT_INDICES)
 endif()
 
+if(ODE_HASH_SPACE_SHRINKING)
+	target_compile_definitions(ODE PRIVATE -DALLOW_HASH_SPACE_SHRINKING)
+endif()
+
 if(NOT ODE_NO_BUILTIN_THREADING_IMPL)
 	target_compile_definitions(ODE PRIVATE -DdBUILTIN_THREADING_IMPL_ENABLED)
 endif()
@@ -902,6 +907,7 @@ if(ODE_WITH_TESTS)
 		tests/collision.cpp
 		tests/collision_point_depth.cpp
 		tests/friction.cpp
+		tests/hash_space.cpp
 		tests/joint.cpp
 		tests/main.cpp
 		tests/odemath.cpp

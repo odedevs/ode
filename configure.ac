@@ -265,6 +265,18 @@ else
 fi
 
 
+dnl Check if the user wants hash spaces to periodically shrink their scratch memory
+hash_space_shrinking=no
+AC_ARG_ENABLE([hash-space-shrinking], AS_HELP_STRING([--enable-hash-space-shrinking],
+        [let hash spaces periodically release unused collision scratch memory]),
+        [hash_space_shrinking=$enableval]
+        )
+if test x$hash_space_shrinking = xyes; then
+        AC_DEFINE(ALLOW_HASH_SPACE_SHRINKING, 1,
+                [Let hash spaces periodically release unused collision scratch memory])
+fi
+
+
 dnl Check if the user wants to profile ODE using gprof
 AC_MSG_CHECKING(for gprof)
 AC_ARG_ENABLE([gprof],

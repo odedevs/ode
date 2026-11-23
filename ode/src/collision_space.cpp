@@ -319,6 +319,97 @@ struct Node {
 };
 
 
+// Opt-in periodic shrinking of the hash space scratch buffers.
+//
+// By default a hash space keeps its collide() scratch buffers at their
+// high-water mark until the space is destroyed. This avoids any heap traffic
+// in steady state, but a single spike in geom count pins that memory forever
+// (the `tested' bit matrix alone is n*n/8 bytes). Define
+// ALLOW_HASH_SPACE_SHRINKING to have the space periodically release capacity
+// it has not needed recently:
+//
+//   every HASH_SPACE_SHRINK_INTERVAL collide() calls, any buffer whose
+//   capacity exceeds HASH_SPACE_SHRINK_FACTOR times its peak use during that
+//   window (and is at least HASH_SPACE_SHRINK_MIN_BYTES large) is reallocated
+//   down to that peak.
+//
+// All three tunables may be overridden on the compiler command line.
+#ifdef ALLOW_HASH_SPACE_SHRINKING
+#ifndef HASH_SPACE_SHRINK_INTERVAL
+#define HASH_SPACE_SHRINK_INTERVAL 256
+#endif
+#ifndef HASH_SPACE_SHRINK_FACTOR
+#define HASH_SPACE_SHRINK_FACTOR 4
+#endif
+#ifndef HASH_SPACE_SHRINK_MIN_BYTES
+#define HASH_SPACE_SHRINK_MIN_BYTES 4096
+#endif
+#endif // ALLOW_HASH_SPACE_SHRINKING
+
+
+// Scratch memory used by dxHashSpace::collide(). A hash space owns one of
+// these so that, once the buffers have grown to fit the scene, collide() does
+// not touch the heap at all. Contents are only meaningful during a call.
+struct dxHashSpaceScratch {
+    std::vector<dxAABB> hash_boxes;	// AABBs in the hash table
+    std::vector<dxAABB> big_boxes;	// AABBs too big for the hash table
+    std::vector<uint8> tested;		// n*n bit matrix of tested pairs
+    std::vector<Node*> table;		// hash table buckets
+    std::vector<Node> nodes;		// (AABB, cell) nodes; must not reallocate
+                                        // while the table points into it
+
+#ifdef ALLOW_HASH_SPACE_SHRINKING
+    // peak element counts seen during the current shrink window
+    sizeint peak_hash_boxes, peak_big_boxes, peak_tested, peak_table, peak_nodes;
+    unsigned calls_in_window;
+
+    dxHashSpaceScratch():
+        peak_hash_boxes(0), peak_big_boxes(0), peak_tested(0), peak_table(0),
+        peak_nodes(0), calls_in_window(0) {}
+
+    // Record the usage of the call that just finished and, at the end of each
+    // window, release capacity that went unused during the whole window.
+    void endCall()
+    {
+        recordPeak(peak_hash_boxes, hash_boxes.size());
+        recordPeak(peak_big_boxes, big_boxes.size());
+        recordPeak(peak_tested, tested.size());
+        recordPeak(peak_table, table.size());
+        recordPeak(peak_nodes, nodes.size());
+
+        if (++calls_in_window < HASH_SPACE_SHRINK_INTERVAL) return;
+
+        shrinkToPeak(hash_boxes, peak_hash_boxes);
+        shrinkToPeak(big_boxes, peak_big_boxes);
+        shrinkToPeak(tested, peak_tested);
+        shrinkToPeak(table, peak_table);
+        shrinkToPeak(nodes, peak_nodes);
+
+        peak_hash_boxes = peak_big_boxes = peak_tested = peak_table = peak_nodes = 0;
+        calls_in_window = 0;
+    }
+
+private:
+    static void recordPeak(sizeint &peak, sizeint used)
+    {
+        if (used > peak) peak = used;
+    }
+
+    // Only called between collide() calls, so contents can be discarded.
+    template <class T>
+    static void shrinkToPeak(std::vector<T> &v, sizeint peak)
+    {
+        if (v.capacity() * sizeof(T) < HASH_SPACE_SHRINK_MIN_BYTES) return;
+        if (v.capacity() <= peak * HASH_SPACE_SHRINK_FACTOR) return;
+        // shrink_to_fit() is non-binding; swapping is guaranteed to release.
+        std::vector<T> resized;
+        resized.reserve(peak);
+        v.swap(resized);
+    }
+#endif // ALLOW_HASH_SPACE_SHRINKING
+};
+
+
 // return the `level' of an AABB. the AABB will be put into cells at this
 // level - the cell size will be 2^level. the level is chosen to be the
 // smallest value such that the AABB occupies no more than 8 cells, regardless
@@ -368,12 +459,23 @@ struct dxHashSpace : public dxSpace {
     int global_maxlevel;	// objects that need a level larger than this will be
     // put in a "big objects" list instead of a hash table
 
+    // Reused across collide() calls. Not safe for concurrent collide() calls
+    // on the same space from multiple threads (each space must be collided by
+    // one thread at a time).
+    dxHashSpaceScratch scratch;
+    // true while a collide() call is using `scratch'. A near callback that
+    // re-enters collide() on this same space gets temporary buffers instead.
+    bool scratch_in_use;
+
     dxHashSpace (dSpaceID _space);
     void setLevels (int minlevel, int maxlevel);
     void getLevels (int *minlevel, int *maxlevel);
     void cleanGeoms();
     void collide (void *data, dNearCallback *callback);
     void collide2 (void *data, dxGeom *geom, dNearCallback *callback);
+
+private:
+    void collideWithScratch (dxHashSpaceScratch &s, void *data, dNearCallback *callback);
 };
 
 
@@ -382,6 +484,7 @@ dxHashSpace::dxHashSpace (dSpaceID _space) : dxSpace (_space)
     type = dHashSpaceClass;
     global_minlevel = -3;
     global_maxlevel = 10;
+    scratch_in_use = false;
 }
 
 
@@ -421,8 +524,39 @@ void dxHashSpace::cleanGeoms()
 void dxHashSpace::collide (void *data, dNearCallback *callback)
 {
     dAASSERT(this && callback);
+
+    if (scratch_in_use) {
+        // re-entered from a near callback of an outer collide() on this same
+        // space: the outer call's nodes still point into `scratch', so use
+        // throwaway buffers rather than clobbering them
+        dxHashSpaceScratch temporary;
+        collideWithScratch (temporary, data, callback);
+        return;
+    }
+
+    scratch_in_use = true;
+    collideWithScratch (scratch, data, callback);
+    scratch_in_use = false;
+
+#ifdef ALLOW_HASH_SPACE_SHRINKING
+    scratch.endCall();
+#endif
+}
+
+
+void dxHashSpace::collideWithScratch (dxHashSpaceScratch &s, void *data,
+                                      dNearCallback *callback)
+{
     dxGeom *geom;
     int i,maxlevel;
+
+    // empty the scratch buffers (keeping their capacity) up front, so that
+    // the early return below also reports zero usage for this call
+    s.hash_boxes.clear();
+    s.big_boxes.clear();
+    s.tested.clear();
+    s.table.clear();
+    s.nodes.clear();
 
     // 0 or 1 geoms can't collide with anything
     if (count < 2) return;
@@ -437,8 +571,9 @@ void dxHashSpace::collide (void *data, dNearCallback *callback)
     // level that we need.
 
     typedef std::vector<dxAABB> AABBlist;
-    AABBlist hash_boxes; // list of AABBs in hash table
-    AABBlist big_boxes; // list of AABBs too big for hash table
+    AABBlist &hash_boxes = s.hash_boxes; // list of AABBs in hash table
+    AABBlist &big_boxes = s.big_boxes; // list of AABBs too big for hash table
+    // Node::aabb points into hash_boxes, so it must not reallocate below
     hash_boxes.reserve(count);
     // total number of (AABB, cell) hash table nodes, see the node pool below
     sizeint numNodes = 0;
@@ -486,7 +621,8 @@ void dxHashSpace::collide (void *data, dNearCallback *callback)
     // have been intersection-tested against each other yet. this array can
     // grow large with high n, but oh well...
     int tested_rowsize = (n+7) >> 3;	// number of bytes needed for n bits
-    std::vector<uint8> tested(n * tested_rowsize);
+    std::vector<uint8> &tested = s.tested;
+    tested.assign(n * tested_rowsize, 0);
 
     // create a hash table to store all AABBs. each AABB may take up to 8 cells.
     // we use chaining to resolve collisions, but we use a relatively large table
@@ -504,16 +640,17 @@ void dxHashSpace::collide (void *data, dNearCallback *callback)
 
     // allocate and initialize hash table node pointers
     typedef std::vector<Node*> HashTable;
-    HashTable table(sz);
+    HashTable &table = s.table;
+    table.assign(sz, (Node*)0);
 
-    // All nodes come from one block instead of one heap allocation per
-    // (AABB, cell) on every collide() call. numNodes was counted while
-    // discretizing the AABBs above so that the block never reallocates
-    // (nodes point at each other); that count must match the cells visited
-    // by the insertion loop below. Each AABB covers at most 2 cells per axis
-    // (findLevel() picks a cell at least as big as the box), so
-    // numNodes <= 8 * hash_boxes.size().
-    std::vector<Node> nodes;
+    // All nodes come from one block owned by the space instead of one heap
+    // allocation per (AABB, cell) on every collide() call. numNodes was
+    // counted while discretizing the AABBs above so that the block never
+    // reallocates (nodes point at each other); that count must match the
+    // cells visited by the insertion loop below. Each AABB covers at most 2
+    // cells per axis (findLevel() picks a cell at least as big as the box),
+    // so numNodes <= 8 * hash_boxes.size().
+    std::vector<Node> &nodes = s.nodes;
     nodes.reserve(numNodes);
 
     // add each AABB to the hash table (may need to add it to up to 8 cells)
