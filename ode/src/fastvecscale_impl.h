@@ -85,7 +85,7 @@ void scaleLargeVector(dReal *aStart, const dReal *dStart, unsigned elementCount)
 template<unsigned int block_step, unsigned int a_stride, unsigned int d_stride>
 /*static */
 void ThreadedEquationSolverLDLT::participateScalingVector(dReal *ptrAStart, const dReal *ptrDStart, const unsigned elementCount,
-    volatile atomicord32 &refBlockCompletionProgress/*=0*/)
+    std::atomic<uint32_t> &refBlockCompletionProgress/*=0*/)
 {
     dAASSERT (ptrAStart != NULL);
     dAASSERT(ptrDStart != NULL);

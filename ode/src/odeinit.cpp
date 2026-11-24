@@ -35,7 +35,6 @@ ODE initialization/finalization code
 #include "collision_kernel.h"
 #include "collision_trimesh_internal.h"
 #include "odetls.h"
-#include "odeou.h"
 #include "default_threading.h"
 
 
@@ -68,13 +67,11 @@ enum EODEINITMODE
     OIM__MAX
 };
 
-#if dTLS_ENABLED
 static const EODETLSKIND g_atkTLSKindsByInitMode[OIM__MAX] =
 {
     OTK_AUTOCLEANUP, // OIM_AUTOTLSCLEANUP,
     OTK_MANUALCLEANUP, // OIM_MANUALTLSCLEANUP,
 };
-#endif // #if dTLS_ENABLED
 
 static inline bool IsODEModeInitialized(EODEINITMODE imInitMode)
 {
@@ -108,7 +105,6 @@ static bool AllocateThreadBasicDataIfNecessary(EODEINITMODE imInitMode)
 
     do
     {
-#if dTLS_ENABLED
         EODETLSKIND tkTlsKind = g_atkTLSKindsByInitMode[imInitMode];
 
         const unsigned uDataAllocationFlags = COdeTls::GetDataAllocationFlags(tkTlsKind);
@@ -122,9 +118,6 @@ static bool AllocateThreadBasicDataIfNecessary(EODEINITMODE imInitMode)
                 break;
             }
         }
-#else
-        (void)imInitMode; // unused
-#endif // #if dTLS_ENABLED
 
         bResult = true;
     }
@@ -135,8 +128,6 @@ static bool AllocateThreadBasicDataIfNecessary(EODEINITMODE imInitMode)
 
 static void FreeThreadBasicDataOnFailureIfNecessary(EODEINITMODE imInitMode)
 {
-#if dTLS_ENABLED
-
     if (imInitMode == OIM_MANUALTLSCLEANUP)
     {
         EODETLSKIND tkTlsKind = g_atkTLSKindsByInitMode[imInitMode];
@@ -149,12 +140,8 @@ static void FreeThreadBasicDataOnFailureIfNecessary(EODEINITMODE imInitMode)
             COdeTls::CleanupForThread();
         }
     }
-#else
-    (void)imInitMode; // unused
-#endif // #if dTLS_ENABLED
 }
 
-#if dTLS_ENABLED
 static bool AllocateThreadCollisionData(EODETLSKIND tkTlsKind)
 {
     bool bResult = false;
@@ -182,7 +169,6 @@ static bool AllocateThreadCollisionData(EODETLSKIND tkTlsKind)
 
     return bResult;
 }
-#endif // dTLS_ENABLED
 
 static bool AllocateThreadCollisionDataIfNecessary(EODEINITMODE imInitMode, bool &bOutDataAllocated)
 {
@@ -191,7 +177,6 @@ static bool AllocateThreadCollisionDataIfNecessary(EODEINITMODE imInitMode, bool
 
     do 
     {
-#if dTLS_ENABLED
         EODETLSKIND tkTlsKind = g_atkTLSKindsByInitMode[imInitMode];
 
         const unsigned uDataAllocationFlags = COdeTls::GetDataAllocationFlags(tkTlsKind);
@@ -205,9 +190,6 @@ static bool AllocateThreadCollisionDataIfNecessary(EODEINITMODE imInitMode, bool
 
             bOutDataAllocated = true;
         }
-#else
-        (void)imInitMode; // unused
-#endif // #if dTLS_ENABLED
 
         bResult = true;
     }
@@ -218,16 +200,11 @@ static bool AllocateThreadCollisionDataIfNecessary(EODEINITMODE imInitMode, bool
 
 static void FreeThreadCollisionData(EODEINITMODE imInitMode)
 {
-#if dTLS_ENABLED
-
     EODETLSKIND tkTlsKind = g_atkTLSKindsByInitMode[imInitMode];
 
     COdeTls::DestroyTrimeshCollidersCache(tkTlsKind);
 
     COdeTls::DropDataAllocationFlags(tkTlsKind, TLD_INTERNAL_COLLISIONDATA_ALLOCATED);
-#else
-    (void)imInitMode; // unused
-#endif // dTLS_ENABLED
 }
 
 
@@ -235,18 +212,8 @@ static bool InitODEForMode(EODEINITMODE imInitMode)
 {
     bool bResult = false;
 
-#if dOU_ENABLED
-    bool bOUCustomizationsDone = false;
-#endif
-#if dATOMICS_ENABLED
-    bool bAtomicsInitialized = false;
-#endif
-#if dTLS_ENABLED
     EODETLSKIND tkTLSKindToInit = g_atkTLSKindsByInitMode[imInitMode];
     bool bTlsInitialized = false;
-#else
-    (void)imInitMode; // unused
-#endif
 
     bool bWorldThreadingInitialized = false;
 
@@ -254,35 +221,12 @@ static bool InitODEForMode(EODEINITMODE imInitMode)
     {
         bool bAnyModeAlreadyInitialized = IsODEAnyModeInitialized();
 
-        if (!bAnyModeAlreadyInitialized)
-        {
-#if dOU_ENABLED
-            if (!COdeOu::DoOUCustomizations())
-            {
-                break;
-            }
-
-            bOUCustomizationsDone = true;
-#endif
-
-#if dATOMICS_ENABLED
-            if (!COdeOu::InitializeAtomics())
-            {
-                break;
-            }
-
-            bAtomicsInitialized = true;
-#endif
-        }
-
-#if dTLS_ENABLED
         if (!COdeTls::Initialize(tkTLSKindToInit))
         {
             break;
         }
 
         bTlsInitialized = true;
-#endif
 
         if (!bAnyModeAlreadyInitialized)
         {
@@ -318,26 +262,10 @@ static bool InitODEForMode(EODEINITMODE imInitMode)
             DefaultThreadingHolder::finalizeDefaultThreading();
         }
 
-#if dTLS_ENABLED
         if (bTlsInitialized)
         {
             COdeTls::Finalize(tkTLSKindToInit);
         }
-#endif
-
-#if dATOMICS_ENABLED
-        if (bAtomicsInitialized)
-        {
-            COdeOu::FinalizeAtomics();
-        }
-#endif
-
-#if dOU_ENABLED
-        if (bOUCustomizationsDone)
-        {
-            COdeOu::UndoOUCustomizations();
-        }
-#endif
     }
 
     return bResult;
@@ -408,23 +336,8 @@ static void CloseODEForMode(EODEINITMODE imInitMode)
         DefaultThreadingHolder::finalizeDefaultThreading();
     }
 
-#if dTLS_ENABLED
     EODETLSKIND tkTLSKindToFinalize = g_atkTLSKindsByInitMode[imInitMode];
     COdeTls::Finalize(tkTLSKindToFinalize);
-#else
-    (void)imInitMode; // unused
-#endif
-
-    if (!bAnyModeStillInitialized)
-    {
-#if dATOMICS_ENABLED
-        COdeOu::FinalizeAtomics();
-#endif
-
-#if dOU_ENABLED
-        COdeOu::UndoOUCustomizations();
-#endif
-    }
 }
 
 
@@ -495,9 +408,7 @@ static bool InternalAllocateODEDataForThread(unsigned int uiAllocateFlags)
 
 static void InternalCleanupODEAllDataForThread()
 {
-#if dTLS_ENABLED
     COdeTls::CleanupForThread();
-#endif
 }
 
 //****************************************************************************

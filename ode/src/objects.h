@@ -32,6 +32,8 @@
 #include <ode/mass.h>
 #include <ode/objects.h>
 #include "error.h"
+#include <atomic>
+#include <cstdint>
 #include "array.h"
 #include "common.h"
 #include "threading_base.h"
@@ -168,10 +170,10 @@ public:
     void AssignStatisticsSink(dWorldQuickStepIterationCount_DynamicAdjustmentStatistics *statistics) { m_statistics = statistics; }
     void ClearStatisticsSink() { m_statistics = &m_internal_statistics; }
 
-    volatile atomicord32 *GetStatisticsIterationCountStorage() const { dSASSERT(sizeof(atomicord32) == membersize(dWorldQuickStepIterationCount_DynamicAdjustmentStatistics, iteration_count)); return _type_cast_union<atomicord32>(&m_statistics->iteration_count); }
-    volatile atomicord32 *GetStatisticsPrematureExitsStorage() const { dSASSERT(sizeof(atomicord32) == membersize(dWorldQuickStepIterationCount_DynamicAdjustmentStatistics, premature_exits)); return _type_cast_union<atomicord32>(&m_statistics->premature_exits); }
-    volatile atomicord32 *GetStatisticsProlongedExecutionsStorage() const { dSASSERT(sizeof(atomicord32) == membersize(dWorldQuickStepIterationCount_DynamicAdjustmentStatistics, prolonged_execs)); return _type_cast_union<atomicord32>(&m_statistics->prolonged_execs); }
-    volatile atomicord32 *GetStatisticsFullExtraExecutionsStorage() const { dSASSERT(sizeof(atomicord32) == membersize(dWorldQuickStepIterationCount_DynamicAdjustmentStatistics, full_extra_execs)); return _type_cast_union<atomicord32>(&m_statistics->full_extra_execs); }
+    std::atomic<uint32_t> *GetStatisticsIterationCountStorage() const { dSASSERT(sizeof(uint32_t) == membersize(dWorldQuickStepIterationCount_DynamicAdjustmentStatistics, iteration_count)); return reinterpret_cast<std::atomic<uint32_t>*>(&m_statistics->iteration_count); }
+    std::atomic<uint32_t> *GetStatisticsPrematureExitsStorage() const { dSASSERT(sizeof(uint32_t) == membersize(dWorldQuickStepIterationCount_DynamicAdjustmentStatistics, premature_exits)); return reinterpret_cast<std::atomic<uint32_t>*>(&m_statistics->premature_exits); }
+    std::atomic<uint32_t> *GetStatisticsProlongedExecutionsStorage() const { dSASSERT(sizeof(uint32_t) == membersize(dWorldQuickStepIterationCount_DynamicAdjustmentStatistics, prolonged_execs)); return reinterpret_cast<std::atomic<uint32_t>*>(&m_statistics->prolonged_execs); }
+    std::atomic<uint32_t> *GetStatisticsFullExtraExecutionsStorage() const { dSASSERT(sizeof(uint32_t) == membersize(dWorldQuickStepIterationCount_DynamicAdjustmentStatistics, full_extra_execs)); return reinterpret_cast<std::atomic<uint32_t>*>(&m_statistics->full_extra_execs); }
 
 private:
     static unsigned DeriveExtraIterationCount(unsigned iterationCount, dReal extraIterationCountFactor)

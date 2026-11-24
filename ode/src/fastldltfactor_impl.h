@@ -618,13 +618,13 @@ void scaleAndFactorizeL1FirstRowStripe_1(dReal *ARow, dReal *d)
 template<unsigned int block_step, unsigned int b_rows>
 /*static */
 void ThreadedEquationSolverLDLT::participateSolvingL1Stripe_X(const dReal *L, dReal *B, unsigned blockCount, unsigned rowSkip, 
-    volatile atomicord32 &refBlockCompletionProgress/*=0*/, volatile cellindexint *blockProgressDescriptors/*=[blockCount]*/, 
+    std::atomic<uint32_t> &refBlockCompletionProgress/*=0*/, std::atomic<cellindexint> *blockProgressDescriptors/*=[blockCount]*/, 
     FactorizationSolveL1StripeCellContext *cellContexts/*=[CCI__MAX x blockCount] + [blockCount]*/, unsigned ownThreadIndex)
 {
     const unsigned lookaheadRange = 64;
     BlockProcessingState blockProcessingState = BPS_NO_BLOCKS_PROCESSED;
 
-    unsigned completedBlocks = refBlockCompletionProgress;
+    unsigned completedBlocks = refBlockCompletionProgress.load();
     unsigned currentBlock = completedBlocks;
     dIASSERT(completedBlocks <= blockCount);
 
@@ -661,7 +661,7 @@ void ThreadedEquationSolverLDLT::participateSolvingL1Stripe_X(const dReal *L, dR
             CooperativeAtomics::AtomicReadReorderBarrier();
             // It is necessary to read up to date completedBblocks value after the descriptor retrieval
             // as otherwise the logic below breaks
-            completedBlocks = refBlockCompletionProgress;
+            completedBlocks = refBlockCompletionProgress.load();
 
             if (!GET_CELLDESCRIPTOR_ISLOCKED(testDescriptor))
             {
@@ -874,7 +874,7 @@ void ThreadedEquationSolverLDLT::participateSolvingL1Stripe_X(const dReal *L, dR
                             }
 
                             // Take a look if anymore rows have been completed...
-                            completedBlocks = refBlockCompletionProgress;
+                            completedBlocks = refBlockCompletionProgress.load();
                             dIASSERT(completedBlocks >= finalColumnBlock);
 
                             if (completedBlocks == finalColumnBlock)
@@ -1207,7 +1207,7 @@ void ThreadedEquationSolverLDLT::participateSolvingL1Stripe_X(const dReal *L, dR
                 dSASSERT(b_rows >= 1 && b_rows <= 2);
 
                 ThrsafeIncrementIntUpToLimit(&refBlockCompletionProgress, currentBlock + 1);
-                dIASSERT(refBlockCompletionProgress >= currentBlock + 1);
+                dIASSERT(refBlockCompletionProgress.load() >= currentBlock + 1);
 
                 // And assign the completed status no matter what
                 CooperativeAtomics::AtomicStoreCellindexint(&blockProgressDescriptors[currentBlock], INVALID_CELLDESCRIPTOR);
@@ -1220,7 +1220,7 @@ void ThreadedEquationSolverLDLT::participateSolvingL1Stripe_X(const dReal *L, dR
 
         if (!stayWithinTheBlock)
         {
-            completedBlocks = refBlockCompletionProgress;
+            completedBlocks = refBlockCompletionProgress.load();
             
             if (completedBlocks == blockCount)
             {
@@ -1468,7 +1468,7 @@ void ThreadedEquationSolverLDLT::participateScalingAndFactorizingL1Stripe_X(dRea
         unsigned partialSumThreadIndex;
         for (bool exitLoop = false; !exitLoop; exitLoop = CooperativeAtomics::AtomicCompareExchangeUint32(&factorizationContext->m_sumThreadIndex, partialSumThreadIndex, ownThreadIndex + 1))
         {
-            partialSumThreadIndex = factorizationContext->m_sumThreadIndex;
+            partialSumThreadIndex = factorizationContext->m_sumThreadIndex.load();
             
             if (partialSumThreadIndex != 0)
             {
@@ -1488,7 +1488,7 @@ void ThreadedEquationSolverLDLT::participateScalingAndFactorizingL1Stripe_X(dRea
     if (threadExitIndex == 0)
     {
         // Let the last thread retrieve the sum and perform final computations
-        unsigned sumThreadIndex = factorizationContext->m_sumThreadIndex;
+        unsigned sumThreadIndex = factorizationContext->m_sumThreadIndex.load();
         dIASSERT(sumThreadIndex != 0); // The rowIndex was asserted to be not zero, so at least one thread must have done something
 
         const FactorizationFactorizeL1StripeThreadContext &sumContext = factorizationContext->m_threadContexts[sumThreadIndex - 1];

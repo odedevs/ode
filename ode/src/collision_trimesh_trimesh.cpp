@@ -40,12 +40,6 @@
 #include "collision_trimesh_internal.h"
 
 
-#if !dTLS_ENABLED
-// Have collider cache instance unconditionally of OPCODE or GIMPACT selection
-/*extern */TrimeshCollidersCache g_ccTrimeshCollidersCache;
-#endif
-
-
 #if dTRIMESH_OPCODE
 
 // New Implementation

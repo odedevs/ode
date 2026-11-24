@@ -27,7 +27,7 @@
 
 /*
 
-ODE interface to OU library functions.
+ODE utility types: enum-indexed arrays and simple bitflags.
 
 */
 
@@ -35,75 +35,107 @@ ODE interface to OU library functions.
 #ifndef _ODE_ODEOU_H_
 #define _ODE_ODEOU_H_
 
-
-#if dOU_ENABLED
-
-#include <ou/assert.h>
-#include <ou/enumarrays.h>
-#include <ou/macros.h>
-#include <ou/templates.h>
-#include <ou/typewrapper.h>
-#include <ou/simpleflags.h>
-#include <ou/customization.h>
-
-#if dATOMICS_ENABLED
-#include <ou/atomic.h>
-#include <ou/atomicflags.h>
-#endif
-
-#if dTLS_ENABLED
-#include <ou/threadlocalstorage.h>
-#endif
+#include <cstdint>
 
 
-using _OU_NAMESPACE::CEnumUnsortedElementArray;
-using _OU_NAMESPACE::CEnumSortedElementArray;
+//****************************************************************************
+// Enum-indexed lookup array (unsorted, linear-search decode)
 
-#if dATOMICS_ENABLED
-using _OU_NAMESPACE::atomicord32;
-using _OU_NAMESPACE::atomicptr;
-using _OU_NAMESPACE::InitializeAtomicAPI;
-using _OU_NAMESPACE::FinalizeAtomicAPI;
-using _OU_NAMESPACE::AtomicIncrement;
-using _OU_NAMESPACE::AtomicDecrement;
-using _OU_NAMESPACE::AtomicIncrementNoResult;
-using _OU_NAMESPACE::AtomicDecrementNoResult;
-using _OU_NAMESPACE::AtomicCompareExchange;
-using _OU_NAMESPACE::AtomicExchange;
-using _OU_NAMESPACE::AtomicExchangeAddNoResult;
-using _OU_NAMESPACE::AtomicExchangeAdd;
-using _OU_NAMESPACE::AtomicCompareExchangePointer;
-using _OU_NAMESPACE::AtomicExchangePointer;
-using _OU_NAMESPACE::AtomicReadReorderBarrier;
-using _OU_NAMESPACE::AtomicStore;
-using _OU_NAMESPACE::AtomicStorePointer;
-#endif
-
-
-class COdeOu
+template<typename EnumType, EnumType EnumMax, typename ElementType>
+struct CEnumUnsortedElementArray
 {
-public:
-    static bool DoOUCustomizations();
-    static void UndoOUCustomizations();
+    ElementType data[static_cast<unsigned>(EnumMax)];
 
-#if dATOMICS_ENABLED
-    static bool InitializeAtomics() { return InitializeAtomicAPI(); }
-    static void FinalizeAtomics() { FinalizeAtomicAPI(); }
-#endif
+    const ElementType &Encode(EnumType index) const
+    {
+        return data[static_cast<unsigned>(index)];
+    }
+
+    EnumType Decode(const ElementType &value) const
+    {
+        for (unsigned i = 0; i < static_cast<unsigned>(EnumMax); ++i)
+        {
+            if (data[i] == value) return static_cast<EnumType>(i);
+        }
+        return static_cast<EnumType>(EnumMax);
+    }
+
+    bool IsValidDecode(EnumType val) const
+    {
+        return static_cast<unsigned>(val) != static_cast<unsigned>(EnumMax);
+    }
+
+    const ElementType *GetStoragePointer() const
+    {
+        return data;
+    }
 };
 
 
-#endif 
+//****************************************************************************
+// Enum-indexed lookup array (sorted, binary-search decode)
+
+template<typename EnumType, EnumType EnumMax, typename ElementType>
+struct CEnumSortedElementArray
+{
+    ElementType data[static_cast<unsigned>(EnumMax)];
+
+    const ElementType &Encode(EnumType index) const
+    {
+        return data[static_cast<unsigned>(index)];
+    }
+
+    EnumType Decode(const ElementType &value) const
+    {
+        unsigned lo = 0, hi = static_cast<unsigned>(EnumMax);
+        while (lo < hi)
+        {
+            unsigned mid = lo + (hi - lo) / 2;
+            if (data[mid] < value) lo = mid + 1;
+            else hi = mid;
+        }
+        if (lo < static_cast<unsigned>(EnumMax) && !(value < data[lo]))
+            return static_cast<EnumType>(lo);
+        return static_cast<EnumType>(EnumMax);
+    }
+
+    bool IsValidDecode(EnumType val) const
+    {
+        return static_cast<unsigned>(val) != static_cast<unsigned>(EnumMax);
+    }
+
+    const ElementType *GetStoragePointer() const
+    {
+        return data;
+    }
+};
 
 
-#if !dOU_ENABLED || !dATOMICS_ENABLED
+//****************************************************************************
+// Simple bitfield flags wrapper
 
-typedef unsigned int atomicord32;
-typedef void *atomicptr;
+class CSimpleFlags
+{
+public:
+    typedef std::uint32_t value_type;
 
+    CSimpleFlags(): m_value(0) {}
+    explicit CSimpleFlags(value_type v): m_value(v) {}
 
-#endif // dOU_ENABLED
+    void AssignFlagsAllValues(value_type v) { m_value = v; }
+    value_type QueryFlagsAllValues() const { return m_value; }
 
+    void SignalFlagsMaskValue(value_type mask) { m_value |= mask; }
+    void DropFlagsMaskValue(value_type mask) { m_value &= ~mask; }
+    void SetFlagsMaskValue(value_type mask, bool val)
+    {
+        m_value = val ? (m_value | mask) : (m_value & ~mask);
+    }
+    bool GetFlagsMaskValue(value_type mask) const { return (m_value & mask) != 0; }
+
+private:
+    value_type m_value;
+};
 
 
 #endif // _ODE_ODEOU_H_

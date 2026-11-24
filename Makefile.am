@@ -1,10 +1,6 @@
 AUTOMAKE_OPTIONS = foreign
 ACLOCAL_AMFLAGS = -I m4 --install
 
-if ENABLE_OU
-OU_DIR = ou
-endif
-
 if LIBCCD
 if LIBCCD_INTERNAL
 LIBCCD_DIR = libccd
@@ -27,7 +23,6 @@ SUBDIRS = include \
           $(DRAWSTUFF_DIR) \
           $(GIMPACT_DIR) \
           $(OPCODE_DIR) \
-          $(OU_DIR) \
           $(LIBCCD_DIR) \
           ode \
           tests

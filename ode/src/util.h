@@ -23,6 +23,7 @@
 #ifndef _ODE_UTIL_H_
 #define _ODE_UTIL_H_
 
+#include <atomic>
 #include "objects.h"
 #include "common.h"
 
@@ -223,8 +224,8 @@ private:
     void SetIslandsMemArena(dxWorldProcessMemArena *pmaInstance) { m_pmaIslandsArena = pmaInstance; }
     dxWorldProcessMemArena *GetIslandsMemArena() const { return m_pmaIslandsArena; }
 
-    void SetStepperArenasList(dxWorldProcessMemArena *pmaInstance) { m_pmaStepperArenas = pmaInstance; }
-    dxWorldProcessMemArena *GetStepperArenasList() const { return m_pmaStepperArenas; }
+    void SetStepperArenasList(dxWorldProcessMemArena *pmaInstance) { m_pmaStepperArenas.store(pmaInstance); }
+    dxWorldProcessMemArena *GetStepperArenasList() const { return m_pmaStepperArenas.load(); }
 
     inline dxWorldProcessMemArena *GetStepperArenasHead() const;
     inline bool TryExtractingStepperArenasHead(dxWorldProcessMemArena *pmaHeadInstance);
@@ -250,7 +251,7 @@ private:
 
 private:
     dxWorldProcessMemArena  *m_pmaIslandsArena;
-    dxWorldProcessMemArena  *volatile m_pmaStepperArenas;
+    std::atomic<dxWorldProcessMemArena *> m_pmaStepperArenas;
     dxWorld                 *m_pswObjectsAllocWorld;
     dMutexGroupID           m_pmgStepperMutexGroup;
     dCallWaitID             m_pcwIslandsSteppingWait;
