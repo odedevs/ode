@@ -26,6 +26,7 @@
 #include "matrix.h"
 #include "error.h"
 #include "odeou.h"
+#include "random.h"
 
 //****************************************************************************
 // random numbers
@@ -39,13 +40,39 @@ unsigned long dRand()
     do {
 #endif
         origSeed = seed;
-        newSeed = ((duint32)1664525 * origSeed + (duint32)1013904223) & (duint32)0xffffffff;
+        newSeed = dxRAND_MULTIPLIER * origSeed + dxRAND_INCREMENT;
 #if dTHREADING_INTF_DISABLED
         seed = newSeed;
 #else
     } while (!AtomicCompareExchange((volatile atomicord32 *)&seed, origSeed, newSeed));
 #endif
     return newSeed;
+}
+
+
+duint32 dxRandReserve(unsigned int count)
+{
+    duint32 origSeed = seed;
+
+    if (count != 0) {
+        // The map does not depend on the seed: it is computed once, outside the compare-exchange loop.
+        duint32 multiplier, increment;
+        dxRandSkip(multiplier, increment, count);
+
+        duint32 newSeed;
+#if !dTHREADING_INTF_DISABLED
+        do {
+#endif
+            origSeed = seed;
+            newSeed = multiplier * origSeed + increment;
+#if dTHREADING_INTF_DISABLED
+            seed = newSeed;
+#else
+        } while (!AtomicCompareExchange((volatile atomicord32 *)&seed, origSeed, newSeed));
+#endif
+    }
+
+    return origSeed;
 }
 
 
@@ -74,68 +101,13 @@ int dTestRand()
 }
 
 
-// adam's all-int straightforward(?) dRandInt (0..n-1)
+// dRand()'s next value, mapped to (0..n-1) by dxRandIntFromValue() (random.h).
 int dRandInt (int n)
 {
-    int result;
-    // Since there is no memory barrier macro in ODE assign via volatile variable 
+    // Since there is no memory barrier macro in ODE assign via volatile variable
     // to prevent compiler reusing seed as value of `r'
     volatile unsigned long raw_r = dRand();
-    duint32 r = (duint32)raw_r;
-    
-    duint32 un = n;
-    dIASSERT(sizeof(n) == sizeof(un));
-
-    // note: probably more aggressive than it needs to be -- might be
-    //       able to get away without one or two of the innermost branches.
-    // if (un <= 0x00010000UL) {
-    //     r ^= (r >> 16);
-    //     if (un <= 0x00000100UL) {
-    //         r ^= (r >> 8);
-    //         if (un <= 0x00000010UL) {
-    //             r ^= (r >> 4);
-    //             if (un <= 0x00000004UL) {
-    //                 r ^= (r >> 2);
-    //                 if (un <= 0x00000002UL) {
-    //                     r ^= (r >> 1);
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
-    // Optimized version of above
-    if (un <= (duint32)0x00000010) {
-        r ^= (r >> 16);
-        r ^= (r >> 8);
-        r ^= (r >> 4);
-        if (un <= (duint32)0x00000002) {
-            r ^= (r >> 2);
-            r ^= (r >> 1);
-            result = (r/* & (duint32)0x01*/) & (un >> 1);
-        } else {
-            if (un <= (duint32)0x00000004) {
-                r ^= (r >> 2);
-                result = ((r & (duint32)0x03) * un) >> 2;
-            } else {
-                result = ((r & (duint32)0x0F) * un) >> 4;
-            }
-        }
-    } else {
-        if (un <= (duint32)0x00000100) {
-            r ^= (r >> 16);
-            r ^= (r >> 8);
-            result = ((r & (duint32)0xFF) * un) >> 8;
-        } else {
-            if (un <= (duint32)0x00010000) {
-                r ^= (r >> 16);
-                result = ((r & (duint32)0xFFFF) * un) >> 16;
-            } else {
-                result = (int)(((duint64)r * un) >> 32);
-            }
-        }
-    }
-
-    return result;
+    return dxRandIntFromValue((duint32)raw_r, n);
 }
 
 

@@ -62,6 +62,7 @@ libode_la_SOURCES =     nextafterf.c \
                         odetls.h \
                         plane.cpp \
                         quickstep.cpp quickstep.h \
+                        random.h \
                         ray.cpp \
                         resource_control.cpp resource_control.h \
                         rotation.cpp \
